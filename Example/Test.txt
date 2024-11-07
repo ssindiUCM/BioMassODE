@@ -5,8 +5,6 @@ A + 2 * B -> C , k_1
 A + B -> A + C, k_6
 A + 2 * B <-> D , k_1 , k_2
 D + E -> F , k_3
-X + Y , k_4  
- # Invalid: missing direction
-Z <-> W , k_5  
-# Invalid: missing third rate
+X + Y , k_4  # Invalid: missing direction
+Z <-> W , k_5 # Invalid: missing third rate
 A -> F, k_1

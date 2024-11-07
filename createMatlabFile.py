@@ -125,87 +125,6 @@ def formatFwdReaction(reactants, reactant_coeffs, products, product_coeffs):
 
     return final_string
 
-##Parses the reactions from the input file.
-##Checks for valid format, skips any invalid lines (outputs them as warnings).
-#def parseReactions(reactions):
-#    parsed_reactions = []
-#
-#    for reaction in reactions:
-#        # Split the reaction line by commas
-#        parts = [part.strip() for part in reaction.split(',')]
-#        
-#        # Check if we have at least the equation and one rate constant
-#        if len(parts) < 2:
-#            print(f"\tError: Invalid format {reaction} (not enough parts)")
-#            continue
-#
-#        # Validate the direction and number of rate constants
-#        if len(parts) == 2:
-#            if '->' not in parts[0] or '<->' in parts[0]:
-#                print(f"\tError: Expected '->' in reaction: {reaction}")
-#                continue
-#            direction = '->'
-#            equation = parts[0]
-#            kfwd = parts[1]
-#            krev = 'N/A'
-#        elif len(parts) == 3:
-#            if '<->' not in parts[0]:
-#                print(f"\tError: Expected '<->' in reaction: {reaction}")
-#                continue
-#            direction = '<->'
-#            equation = parts[0]
-#            kfwd = parts[1]
-#            krev = parts[2]
-#        else:
-#            print(f"\tError: Invalid format {reaction}")
-#            continue
-#
-#        # Parse the equation
-#        result = parseEquation(equation)
-#        if result is None:
-#            print(f"\tError: Invalid equation format in reaction: {reaction}")
-#            continue
-#
-#        reactionCount, reactants, reactantCoeffs, products, productCoeffs = result
-#                
-#        if reactionCount == 1: #We add only 1 case, easy
-#            # Create a Reaction object and add to the list
-#            reaction_obj = Reaction(
-#                equation=equation,
-#                kfwd=kfwd,
-#                reactants=reactants,
-#                reactant_coeffs=reactantCoeffs,
-#                products=products,
-#                product_coeffs=productCoeffs
-#            )
-#            parsed_reactions.append(reaction_obj)
-#        
-#        elif reactionCount == 2: #We add 2 objects;
-#            reaction_fwd = Reaction(
-#                equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs),
-#                kfwd=kfwd,
-#                reactants=reactants,
-#                reactant_coeffs=reactantCoeffs,
-#                products=products,
-#                product_coeffs=productCoeffs
-#            )
-#            
-#            reaction_rev = Reaction(
-#                equation=formatFwdReaction(products, productCoeffs,reactants, reactantCoeffs),
-#                kfwd=krev,
-#                reactants=products,
-#                reactant_coeffs=productCoeffs,
-#                products=reactants,
-#                product_coeffs=reactantCoeffs
-#            )
-#            parsed_reactions.append(reaction_fwd)
-#            parsed_reactions.append(reaction_rev)
-#        else:
-#            print(f"\tError: Invalid equation format in reaction: {reaction}")
-#            continue
-#
-#    return parsed_reactions
-
 def parseReactions(reactions):
     parsed_reactions = []
 
@@ -913,21 +832,25 @@ try:
         for line in file:
             line = line.rstrip()  # Remove trailing newline characters
             
-            if len(line) > 1 and '#' not in line:  # Check if line is not empty and does not contain '#'
-                # Split the line by commas
-                fields = line.split(',')
-                
-                # Check if there are more than one field (i.e., multiple comma-separated values)
-                if len(fields) > 1:
-                    # Process as a biochemistry equation (append the whole line to the list)
-                    biochemicalReactions.append(line)
-                    numReactionsReadIn += 1
-                else:
-                    # Handle the case where there is only one field
-                    # For now, you can just append it separately or process as needed
-                    initialConditions.append(line)
-                    numInitialConditionsReadIn += 1
-                    print(f"Single field line (not parsed as equation): {line}")
+            # Ignore blank lines or lines starting with '#'
+            if not line or line.startswith('#'):
+                continue
+            
+            # Remove everything after the first '#' (if any)
+            line = line.split('#')[0].rstrip()  # Keep part before '#', remove trailing spaces
+
+            # Split the line by commas
+            fields = line.split(',')
+            
+            # Process as biochemical reaction if there are multiple comma-separated values
+            if len(fields) > 1:
+                biochemicalReactions.append(line)
+                numReactionsReadIn += 1
+            else:
+                # Handle single-field lines (initial conditions)
+                initialConditions.append(line)
+                numInitialConditionsReadIn += 1
+                print(f"Single field line (not parsed as equation): {line}")
                     
 except IOError:
     sys.exit(f"Couldn't open {sys.argv[1]}")
