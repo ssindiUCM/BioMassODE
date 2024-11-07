@@ -41,15 +41,24 @@ if len(sys.argv) < 2:
         3) Species names can only contain [0-9a-zA-Z_:]
         4) Species names MUST begin with a letter - no leading numbers allowed
         
-    New Features (08/19/2024):
+    
+    New Features (11/07/2024):
+        1) Allows for specifying the value of the kinetic rates in the reacitons:
+            Allowable:
+                A + B -> C, k1=0.1
+                A + B <-> C, kon, koff=100
+       
+    MIGHT NOT BE VALIE
+    
+        New Features (08/19/2024):
         1) Allows for pure synthesis or pure degradation. ( -> A, B ->)
         2) Handles comments/white space in the biochemical equation file.
         3) Handles duplicate kinetic rates (i.e., p vector is consolidated)
         4) Handles A + B -> A + C reactions (splits stochiometric matrix)
         5) Checks for (and removes) duplicate reactions. (i.e., identical reaction)
             -> Even if the reaction is 1 side of a bi-directional reaction.
-        6) Checks that the dimension of reactions rates is the SAME.
-       
+        6) Checks that the dimension of reactions rates is the SAME (?).
+    
     Coag Specific Changes:
         1) Creates variables to track active and in-active bound lipid sites (s and _st)
             -> Counts the number of "s" and "st" in each species name.
@@ -69,7 +78,7 @@ if len(sys.argv) < 2:
       
     Current Version:
     Suzanne Sindi
-    08/19/2024
+    11/07/2024
 
     """))
     sys.exit("Usage: python3 createMatlabFile.py StaticCoag.txt")
@@ -116,8 +125,87 @@ def formatFwdReaction(reactants, reactant_coeffs, products, product_coeffs):
 
     return final_string
 
-#Parses the reactions from the input file.
-#Checks for valid format, skips any invalid lines (outputs them as warnings).
+##Parses the reactions from the input file.
+##Checks for valid format, skips any invalid lines (outputs them as warnings).
+#def parseReactions(reactions):
+#    parsed_reactions = []
+#
+#    for reaction in reactions:
+#        # Split the reaction line by commas
+#        parts = [part.strip() for part in reaction.split(',')]
+#        
+#        # Check if we have at least the equation and one rate constant
+#        if len(parts) < 2:
+#            print(f"\tError: Invalid format {reaction} (not enough parts)")
+#            continue
+#
+#        # Validate the direction and number of rate constants
+#        if len(parts) == 2:
+#            if '->' not in parts[0] or '<->' in parts[0]:
+#                print(f"\tError: Expected '->' in reaction: {reaction}")
+#                continue
+#            direction = '->'
+#            equation = parts[0]
+#            kfwd = parts[1]
+#            krev = 'N/A'
+#        elif len(parts) == 3:
+#            if '<->' not in parts[0]:
+#                print(f"\tError: Expected '<->' in reaction: {reaction}")
+#                continue
+#            direction = '<->'
+#            equation = parts[0]
+#            kfwd = parts[1]
+#            krev = parts[2]
+#        else:
+#            print(f"\tError: Invalid format {reaction}")
+#            continue
+#
+#        # Parse the equation
+#        result = parseEquation(equation)
+#        if result is None:
+#            print(f"\tError: Invalid equation format in reaction: {reaction}")
+#            continue
+#
+#        reactionCount, reactants, reactantCoeffs, products, productCoeffs = result
+#                
+#        if reactionCount == 1: #We add only 1 case, easy
+#            # Create a Reaction object and add to the list
+#            reaction_obj = Reaction(
+#                equation=equation,
+#                kfwd=kfwd,
+#                reactants=reactants,
+#                reactant_coeffs=reactantCoeffs,
+#                products=products,
+#                product_coeffs=productCoeffs
+#            )
+#            parsed_reactions.append(reaction_obj)
+#        
+#        elif reactionCount == 2: #We add 2 objects;
+#            reaction_fwd = Reaction(
+#                equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs),
+#                kfwd=kfwd,
+#                reactants=reactants,
+#                reactant_coeffs=reactantCoeffs,
+#                products=products,
+#                product_coeffs=productCoeffs
+#            )
+#            
+#            reaction_rev = Reaction(
+#                equation=formatFwdReaction(products, productCoeffs,reactants, reactantCoeffs),
+#                kfwd=krev,
+#                reactants=products,
+#                reactant_coeffs=productCoeffs,
+#                products=reactants,
+#                product_coeffs=reactantCoeffs
+#            )
+#            parsed_reactions.append(reaction_fwd)
+#            parsed_reactions.append(reaction_rev)
+#        else:
+#            print(f"\tError: Invalid equation format in reaction: {reaction}")
+#            continue
+#
+#    return parsed_reactions
+
 def parseReactions(reactions):
     parsed_reactions = []
 
@@ -130,27 +218,25 @@ def parseReactions(reactions):
             print(f"\tError: Invalid format {reaction} (not enough parts)")
             continue
 
-        # Validate the direction and number of rate constants
-        if len(parts) == 2:
-            if '->' not in parts[0] or '<->' in parts[0]:
-                print(f"\tError: Expected '->' in reaction: {reaction}")
-                continue
-            direction = '->'
-            equation = parts[0]
-            kfwd = parts[1]
-            krev = 'N/A'
-        elif len(parts) == 3:
-            if '<->' not in parts[0]:
-                print(f"\tError: Expected '<->' in reaction: {reaction}")
-                continue
-            direction = '<->'
-            equation = parts[0]
-            kfwd = parts[1]
-            krev = parts[2]
-        else:
-            print(f"\tError: Invalid format {reaction}")
-            continue
+        # Separate the equation and rate constants
+        equation = parts[0]
+        rate_constants = parts[1:]
 
+        # Sanity check for number of rate constants based on the reaction direction
+        if '<->' in equation:
+            # For uni-directional reactions, we expect exactly 1 rate constant
+            if len(rate_constants) != 2:
+                print(f"\tError: Bi-directional reaction '{reaction}' must have exactly 2 rate constants.")
+                continue
+        elif '->' in equation:
+            # For bi-directional reactions, we expect exactly 2 rate constants
+            if len(rate_constants) != 1:
+                print(f"\tError: Uni-directional reaction '{reaction}' must have exactly 1 rate constant.")
+                continue
+        else:
+            print(f"\tError: Invalid reaction format (must include '->' or '<->'): {reaction}")
+            continue
+            
         # Parse the equation
         result = parseEquation(equation)
         if result is None:
@@ -158,12 +244,27 @@ def parseReactions(reactions):
             continue
 
         reactionCount, reactants, reactantCoeffs, products, productCoeffs = result
-                
-        if reactionCount == 1: #We add only 1 case, easy
+        
+        # Parse the rate constants;
+        names  = []
+        values = []
+        for rateString in rate_constants:
+            # Check if there's an '=' symbol, which indicates a rate constant with a value
+            if '=' in rateString:
+                name, value = rateString.split('=')
+                names.append(name.strip())
+                values.append(float(value.strip()))  # Convert the value to a float
+            else:
+                # If no '=' symbol, it's just a symbolic rate constant (e.g., "kon")
+                names.append(rateString.strip())
+                values.append(-1)  # Unrealistic value so we know this wasn't set to a number
+
+        if reactionCount == 1:  # We add only 1 case, easy
             # Create a Reaction object and add to the list
             reaction_obj = Reaction(
                 equation=equation,
-                kfwd=kfwd,
+                rateName=names[0],
+                rateValue=values[0],
                 reactants=reactants,
                 reactant_coeffs=reactantCoeffs,
                 products=products,
@@ -171,10 +272,11 @@ def parseReactions(reactions):
             )
             parsed_reactions.append(reaction_obj)
         
-        elif reactionCount == 2: #We add 2 objects;
+        elif reactionCount == 2:  # We add 2 objects for bi-directional reactions
             reaction_fwd = Reaction(
                 equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs),
-                kfwd=kfwd,
+                rateName=names[0],
+                rateValue=values[0],
                 reactants=reactants,
                 reactant_coeffs=reactantCoeffs,
                 products=products,
@@ -182,8 +284,9 @@ def parseReactions(reactions):
             )
             
             reaction_rev = Reaction(
-                equation=formatFwdReaction(products, productCoeffs,reactants, reactantCoeffs),
-                kfwd=krev,
+                equation=formatFwdReaction(products, productCoeffs, reactants, reactantCoeffs),
+                rateName=names[1],
+                rateValue=values[1],
                 reactants=products,
                 reactant_coeffs=productCoeffs,
                 products=reactants,
@@ -196,6 +299,7 @@ def parseReactions(reactions):
             continue
 
     return parsed_reactions
+
 
 # Adjusted parseEquation to handle None case
 def parseEquation(equation):
@@ -256,16 +360,18 @@ def extract_coefficients(terms):
 #################
 
 class Reaction:
-    def __init__(self, equation, kfwd, reactants, reactant_coeffs, products, product_coeffs):
+    def __init__(self, equation, rateName, rateValue, reactants, reactant_coeffs, products, product_coeffs):
         self.equation = equation
-        self.kfwd = kfwd
+        self.rateName  = rateName
+        self.rateValue = rateValue
         self.reactants = reactants
         self.reactant_coeffs = reactant_coeffs
         self.products = products
         self.product_coeffs = product_coeffs
 
     def __repr__(self):
-        return (f"Reaction(equation={self.equation}, kfwd={self.kfwd}, "
+        return (f"Reaction(equation={self.equation}, rateName={self.rateName}, "
+                f"rateValue={self.rateValue}, "
                 f"reactants={self.reactants}, "
                 f"reactant_coeffs={self.reactant_coeffs}, products={self.products}, "
                 f"product_coeffs={self.product_coeffs})")
@@ -277,7 +383,8 @@ class Reaction:
             sorted_self_products = sorted(zip(self.products, self.product_coeffs))
             sorted_other_products = sorted(zip(other.products, other.product_coeffs))
             
-            return (self.kfwd == other.kfwd and
+            return (self.rateName == other.rateName and
+                    self.rateValue == other.rateValue and
                     sorted_self_reactants == sorted_other_reactants and
                     sorted_self_products == sorted_other_products)
         return False
@@ -285,7 +392,7 @@ class Reaction:
     def __hash__(self):
         sorted_reactants = tuple(sorted(zip(self.reactants, self.reactant_coeffs)))
         sorted_products = tuple(sorted(zip(self.products, self.product_coeffs)))
-        return hash((self.kfwd, sorted_reactants, sorted_products))
+        return hash((self.rateName, self.rateValue, sorted_reactants, sorted_products))
 
 
 class Stoich:
@@ -299,7 +406,7 @@ class Stoich:
     
         self.rates = []
         for r in parsedReactions:
-            self.rates.append(r.kfwd)
+            self.rates.append(r.rateName)
     
         self.N = len(self.species)
         self.M = len(self.rates)
@@ -596,7 +703,7 @@ def create_matlab_output(input_file: str, output_file: str, s: Stoich, species: 
 
     f.write("function [time,y] = ")
     f.write(output_file.strip(".m"))
-    f.write("(t_final,t_start)\n")
+    f.write("(t_start,t_final)\n")
     f.write("% Solves a system of ODEs from t=t_start to t=t_final \n")
     f.write("% If no start time is given, then t_start = 0 \n")
     f.write("% If no start or final time is given, then t_start = 0, t_final = 1 \n")
@@ -779,9 +886,9 @@ def add_line_continuations(code: str, max_line_length: int = 80) -> str:
 # Main Code #
 #############
 
-verbose      = False
+verbose        = False
 specialVerbose = True
-previewVal   = 10
+previewVal     = 10
 
 ######################################
 # Step 0: Preprocessing              #
@@ -794,20 +901,41 @@ if verbose:
     print('-' * 50)
     print(f"Step 0: Preprocessing")
 
-
-# Initialize the array and counter
+# Initialize the initial biochemical arrays and counters
 biochemicalReactions = []
+initialConditions    = []
 
-# Open the file specified in the command-line argument
+numReactionsReadIn         = 0
+numInitialConditionsReadIn = 0
+
 try:
     with open(sys.argv[1], 'r') as file:
         for line in file:
             line = line.rstrip()  # Remove trailing newline characters
+            
             if len(line) > 1 and '#' not in line:  # Check if line is not empty and does not contain '#'
-                biochemicalReactions.append(line)  # Append the line to the array
+                # Split the line by commas
+                fields = line.split(',')
+                
+                # Check if there are more than one field (i.e., multiple comma-separated values)
+                if len(fields) > 1:
+                    # Process as a biochemistry equation (append the whole line to the list)
+                    biochemicalReactions.append(line)
+                    numReactionsReadIn += 1
+                else:
+                    # Handle the case where there is only one field
+                    # For now, you can just append it separately or process as needed
+                    initialConditions.append(line)
+                    numInitialConditionsReadIn += 1
+                    print(f"Single field line (not parsed as equation): {line}")
+                    
 except IOError:
     sys.exit(f"Couldn't open {sys.argv[1]}")
 
+# Output the counts to the screen
+if verbose:
+    print(f"\nNumber of Biochemical Equations: {numReactionsReadIn}")
+    print(f"\nNumber of Species with Initial Conditions: {numInitialConditionsReadIn}")
 
 # Get the input file name
 input_file = sys.argv[1]
@@ -877,7 +1005,7 @@ rates = []
 # Iterate through each reaction
 for reaction in parsed_reactions:
     #All reactions are now (after parsing) unidirectional
-    rates.append(reaction.kfwd)
+    rates.append(reaction.rateName)
         
     # Append Reactants and Products if they are not empty
     if reaction.reactants:
