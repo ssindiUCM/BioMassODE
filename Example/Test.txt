@@ -1,3 +1,7 @@
+#Example Initial Conditions
+A = 10.0 #\mu M
+B = 1.0  #\mu M
+
 # Example biochemicalReactions array for debugging
  -> A, k_0
 B ->, d

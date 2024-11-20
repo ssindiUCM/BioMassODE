@@ -19,8 +19,10 @@ if len(sys.argv) < 2:
 
     StaticCoag.txt:
     - Can contain comments that are proceeded with "#" (will be ignored)
+    - On any line, anything after a "#" will be ignored
     - Can contain whitespace (will be ignored)
     - Two types of structure are allowed for biochemical reactions: Forward, Reversible
+    - Can set kinetic rate values when defining biochemical reactions.
         
     SINGLE_REACTION , RATE_VARIABLE
     ex:
@@ -47,6 +49,7 @@ if len(sys.argv) < 2:
             Allowable:
                 A + B -> C, k1=0.1
                 A + B <-> C, kon, koff=100
+        2) Can set initial conditions within the equations file.
        
     MIGHT NOT BE VALIE
     
@@ -274,11 +277,86 @@ def extract_coefficients(terms):
                 species.append(term.strip())
     return coeffs, species
 
+def parseInitialConditions(initialConditions):
+    parsed_ICs = []
+    
+    for ic_str in initialConditions:
+        # Split the string at the '=' character and strip any leading/trailing whitespace
+        try:
+            name, value_str = ic_str.split("=")
+            name = name.strip()
+            value = float(value_str.strip())  # Convert value to float (could be int or float)
+            
+            # Create InitialCondition object and append to the result list
+            parsed_ICs.append(InitialCondition(name, value))
+        
+        except ValueError:
+            print(f"Error: The string '{ic_str}' could not be parsed.")
+        except Exception as e:
+            print(f"Unexpected error while parsing '{ic_str}': {e}")
+    
+    return parsed_ICs
+
 #################
 # Class Objects #
 #################
 
+class InitialCondition:
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+
+    def __repr__(self):
+        return f"InitialCondition(name={self.name}, value={self.value})"
+
+    def __eq__(self, other):
+        if isinstance(other, InitialCondition):
+            # Two InitialCondition objects are equal if they have the same name
+            return self.name == other.name and self.value == other.value
+        return False
+
+    def __hash__(self):
+        # We want the hash based on the 'name' and 'value' attributes.
+        return hash((self.name, self.value))
+
+#class Reaction:
+#    def __init__(self, equation, rateName, rateValue, reactants, reactant_coeffs, products, product_coeffs):
+#        self.equation = equation
+#        self.rateName  = rateName
+#        self.rateValue = rateValue
+#        self.reactants = reactants
+#        self.reactant_coeffs = reactant_coeffs
+#        self.products = products
+#        self.product_coeffs = product_coeffs
+
+#    def __repr__(self):
+#        return (f"Reaction(equation={self.equation}, rateName={self.rateName}, "
+#                f"rateValue={self.rateValue}, "
+#                f"reactants={self.reactants}, "
+#                f"reactant_coeffs={self.reactant_coeffs}, products={self.products}, "
+#                f"product_coeffs={self.product_coeffs})")
+                
+ #   def __eq__(self, other):
+ #       if isinstance(other, Reaction):
+ #           sorted_self_reactants = sorted(zip(self.reactants, self.reactant_coeffs))
+ #           sorted_other_reactants = sorted(zip(other.reactants, other.reactant_coeffs))
+ #           sorted_self_products = sorted(zip(self.products, self.product_coeffs))
+ #           sorted_other_products = sorted(zip(other.products, other.product_coeffs))
+            
+ #           return (self.rateName == other.rateName and
+ #                   self.rateValue == other.rateValue and
+ #                   sorted_self_reactants == sorted_other_reactants and
+ #                   sorted_self_products == sorted_other_products)
+ #       return False
+
+ #   def __hash__(self):
+ #       sorted_reactants = tuple(sorted(zip(self.reactants, self.reactant_coeffs)))
+ #       sorted_products = tuple(sorted(zip(self.products, self.product_coeffs)))
+ #       return hash((self.rateName, self.rateValue, sorted_reactants, sorted_products))
+
 class Reaction:
+    index_counter = 0  # Class variable to keep track of the index
+
     def __init__(self, equation, rateName, rateValue, reactants, reactant_coeffs, products, product_coeffs):
         self.equation = equation
         self.rateName  = rateName
@@ -287,14 +365,15 @@ class Reaction:
         self.reactant_coeffs = reactant_coeffs
         self.products = products
         self.product_coeffs = product_coeffs
+        self.index = Reaction.index_counter  # Assign the current index
+        Reaction.index_counter += 1  # Increment the index for the next reaction
 
     def __repr__(self):
-        return (f"Reaction(equation={self.equation}, rateName={self.rateName}, "
-                f"rateValue={self.rateValue}, "
-                f"reactants={self.reactants}, "
+        return (f"Reaction(index={self.index}, equation={self.equation}, rateName={self.rateName}, "
+                f"rateValue={self.rateValue}, reactants={self.reactants}, "
                 f"reactant_coeffs={self.reactant_coeffs}, products={self.products}, "
                 f"product_coeffs={self.product_coeffs})")
-                
+
     def __eq__(self, other):
         if isinstance(other, Reaction):
             sorted_self_reactants = sorted(zip(self.reactants, self.reactant_coeffs))
@@ -302,6 +381,7 @@ class Reaction:
             sorted_self_products = sorted(zip(self.products, self.product_coeffs))
             sorted_other_products = sorted(zip(other.products, other.product_coeffs))
             
+            # Compare only the content (ignoring index)
             return (self.rateName == other.rateName and
                     self.rateValue == other.rateValue and
                     sorted_self_reactants == sorted_other_reactants and
@@ -311,7 +391,11 @@ class Reaction:
     def __hash__(self):
         sorted_reactants = tuple(sorted(zip(self.reactants, self.reactant_coeffs)))
         sorted_products = tuple(sorted(zip(self.products, self.product_coeffs)))
+        
+        # Hash based on content (ignoring index)
         return hash((self.rateName, self.rateValue, sorted_reactants, sorted_products))
+
+
 
 
 class Stoich:
@@ -805,7 +889,7 @@ def add_line_continuations(code: str, max_line_length: int = 80) -> str:
 # Main Code #
 #############
 
-verbose        = False
+verbose        = True
 specialVerbose = True
 previewVal     = 10
 
@@ -850,21 +934,43 @@ try:
                 # Handle single-field lines (initial conditions)
                 initialConditions.append(line)
                 numInitialConditionsReadIn += 1
-                print(f"Single field line (not parsed as equation): {line}")
+                print(f"\t\tInitial Condition:{line}")
                     
 except IOError:
     sys.exit(f"Couldn't open {sys.argv[1]}")
-
-# Output the counts to the screen
-if verbose:
-    print(f"\nNumber of Biochemical Equations: {numReactionsReadIn}")
-    print(f"\nNumber of Species with Initial Conditions: {numInitialConditionsReadIn}")
 
 # Get the input file name
 input_file = sys.argv[1]
     
 # Extract the PREFIX from the input file name
 prefix, _ = os.path.splitext(input_file)
+
+# Output the counts to the screen
+if verbose:
+    print(f"\t\tNumber of Biochemical Equations: {numReactionsReadIn}")
+    print(f"\t\tNumber of Species with Initial Conditions: {numInitialConditionsReadIn}")
+    print(f"DONE: Step 0 Preprocessing of {sys.argv[1]}")
+    print('-' * 50)
+
+#########################################
+# Step 1: Parse the Initial Conditions  #
+#########################################
+
+if verbose:
+    print(f"Step 1: Parse the Intial Conditions")
+
+
+# Parse the reactions
+parsed_ICs = parseInitialConditions(initialConditions)
+
+if verbose:
+    # Print parsed objects
+    for ic in parsed_ICs:
+        print(f"\t{ic}")
+    print(f"DONE: Step 1 Parsed ")
+    print('-' * 50)
+
+
     
 # Define the output file names
 stoich_output_file   = f"{prefix}Stoich.csv"
@@ -877,7 +983,6 @@ product_output_file  = f"{prefix}Products.csv"
 #rename_output_file = f"{prefix}Rename.m"
 
 if verbose:
-    print(f"\tDONE. Successfully processed {sys.argv[1]}")
     print(f"\tNumber of biochemical reactions: {len(biochemicalReactions)}")
     print(f"\tSome of the Biochemical Reactions:")
     num_reactions_to_print = min(previewVal, len(biochemicalReactions))
@@ -886,12 +991,13 @@ if verbose:
     print('-' * 50)
 
 
+
 ###########################################
-# Step 1: Parse the Biochemical Reactions #
+# Step 2: Parse the Biochemical Reactions #
 ###########################################
 
 if verbose:
-    print(f"Step 1: Parsing the Biochemical Reacitons")
+    print(f"Step 2: Parsing the Biochemical Reacitons")
 
 # Parse the reactions
 parsed_reactions = parseReactions(biochemicalReactions)
