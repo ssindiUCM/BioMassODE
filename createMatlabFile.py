@@ -533,7 +533,7 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str, s: Stoi
     #if v: print("\n")
 
     f.write("function [time,y] = ")
-    f.write(outputPrefix)
+    f.write(matlabFilePrefix)
     f.write("(t_final,t_start)\n")
     f.write("% Solves a system of ODEs from t=t_start to t=t_final \n")
     f.write("% If no start time is given, then t_start = 0 \n")
