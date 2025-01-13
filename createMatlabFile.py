@@ -44,14 +44,18 @@ if len(sys.argv) < 2:
         4) Species names MUST begin with a letter - no leading numbers allowed
         
     
-    New Features (11/07/2024):
-        1) Allows for specifying the value of the kinetic rates in the reacitons:
+    New Features (01/13/2024):
+        1) Can set initial conditions within the equations file.
+        2) Should output species and rates in order they are in the input file.
+       
+       
+    In progress (01/13/2025):
+    1) Allows for specifying the value of the kinetic rates in the reacitons:
             Allowable:
                 A + B -> C, k1=0.1
                 A + B <-> C, kon, koff=100
-        2) Can set initial conditions within the equations file.
-       
-    MIGHT NOT BE VALIE
+                
+    MIGHT NOT BE VALID
     
         New Features (08/19/2024):
         1) Allows for pure synthesis or pure degradation. ( -> A, B ->)
@@ -76,12 +80,9 @@ if len(sys.argv) < 2:
         3) Original version allowed "=" operator. Not sure what this was for.
         4) Text wrap for the long lines in Matlab. (Currently half-implemented)
 
-    Based on previous Python Code by:
-    Michael Stobb (Originally written on 8/4/2023)
-      
     Current Version:
     Suzanne Sindi
-    11/07/2024
+    01/13/2024
 
     """))
     sys.exit("Usage: python3 createMatlabFile.py StaticCoag.txt")
@@ -109,6 +110,14 @@ def flatten_list(lst_of_lists):
 def unique_entries_only(lst):
     """Return only unique entries from a list."""
     return list(set(lst))
+    
+#Keep only unique entries of a list IN ORDER
+def unique_entries_in_order(lst):
+    """Return only unique entries from a list, preserving their order."""
+    seen = set()
+    return [x for x in lst if not (x in seen or seen.add(x))]
+
+    
 
 def formatFwdReaction(reactants, reactant_coeffs, products, product_coeffs):
     # Join reactants with their coefficients
@@ -286,7 +295,7 @@ def parseInitialConditions(initialConditions):
             name, value_str = ic_str.split("=")
             name = name.strip()
             value = float(value_str.strip())  # Convert value to float (could be int or float)
-            
+                        
             # Create InitialCondition object and append to the result list
             parsed_ICs.append(InitialCondition(name, value))
         
@@ -318,41 +327,6 @@ class InitialCondition:
     def __hash__(self):
         # We want the hash based on the 'name' and 'value' attributes.
         return hash((self.name, self.value))
-
-#class Reaction:
-#    def __init__(self, equation, rateName, rateValue, reactants, reactant_coeffs, products, product_coeffs):
-#        self.equation = equation
-#        self.rateName  = rateName
-#        self.rateValue = rateValue
-#        self.reactants = reactants
-#        self.reactant_coeffs = reactant_coeffs
-#        self.products = products
-#        self.product_coeffs = product_coeffs
-
-#    def __repr__(self):
-#        return (f"Reaction(equation={self.equation}, rateName={self.rateName}, "
-#                f"rateValue={self.rateValue}, "
-#                f"reactants={self.reactants}, "
-#                f"reactant_coeffs={self.reactant_coeffs}, products={self.products}, "
-#                f"product_coeffs={self.product_coeffs})")
-                
- #   def __eq__(self, other):
- #       if isinstance(other, Reaction):
- #           sorted_self_reactants = sorted(zip(self.reactants, self.reactant_coeffs))
- #           sorted_other_reactants = sorted(zip(other.reactants, other.reactant_coeffs))
- #           sorted_self_products = sorted(zip(self.products, self.product_coeffs))
- #           sorted_other_products = sorted(zip(other.products, other.product_coeffs))
-            
- #           return (self.rateName == other.rateName and
- #                   self.rateValue == other.rateValue and
- #                   sorted_self_reactants == sorted_other_reactants and
- #                   sorted_self_products == sorted_other_products)
- #       return False
-
- #   def __hash__(self):
- #       sorted_reactants = tuple(sorted(zip(self.reactants, self.reactant_coeffs)))
- #       sorted_products = tuple(sorted(zip(self.products, self.product_coeffs)))
- #       return hash((self.rateName, self.rateValue, sorted_reactants, sorted_products))
 
 class Reaction:
     index_counter = 0  # Class variable to keep track of the index
@@ -394,8 +368,6 @@ class Reaction:
         
         # Hash based on content (ignoring index)
         return hash((self.rateName, self.rateValue, sorted_reactants, sorted_products))
-
-
 
 
 class Stoich:
@@ -534,10 +506,10 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str, s: Stoi
 
     f.write("function [time,y] = ")
     f.write(matlabFilePrefix)
-    f.write("(t_final,t_start)\n")
+    f.write("(t_start,t_final)\n")
     f.write("% Solves a system of ODEs from t=t_start to t=t_final \n")
     f.write("% If no start time is given, then t_start = 0 \n")
-    f.write("% If no start or final time is given, then t_start = 0, t_final = 1 \n")
+    f.write("% If no start or final time is given, then t_start = 0, t_final = 30*60 \n")
     f.write("%\n")
     f.write("%\n")
     f.write("% This file was created by issuing command: \n")
@@ -546,11 +518,14 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str, s: Stoi
     f.write("\n")
     f.write("%\n")
     f.write("\n")
-    f.write("\nif nargin == 1\n")
-    f.write("     t_start = 0;  % Default start time is 0 \n")
-    f.write("elseif nargin == 0\n")
-    f.write("     t_start = 0; % Default start time is 0\n")
-    f.write("     t_final = 1; % Default final time is 1\n")
+    #f.write("\nif nargin == 1\n")
+    #f.write("     t_start = 0;  % Default start time is 0 \n")
+    f.write("if nargin == 0\n")
+    f.write("     t_start = 0;     % Default start time is 0\n")
+    f.write("     t_final = 30*60; % Default final time is 30*60\n")
+    f.write("elseif nargin~=2\n")
+    f.write("   disp('Need to Specify t_start, t_end')\n")
+    f.write("   return\n")
     f.write("end\n\n\n")
 
     fParam.write("% Kinetic Parameters \n")
@@ -590,7 +565,7 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str, s: Stoi
     f.write("options = odeset('RelTol',1e-12,'AbsTol',1e-23);\n\n\n")
 
     f.write("%------------------------- Main Solve ----------------------%\n")
-    f.write("[time,y] = ode15s(@(t,y)RHS(t,y,p), [t_start t_final], init_cond, options);\n")
+    f.write("[time,y] = ode15s(@(t,y)RHS(t,y,p), t_start:1:t_final, init_cond, options);\n")
     f.write("%-----------------------------------------------------------%\n\n\n")
 
     fRename.write("% Rename solution components\n") ##Modify
@@ -692,181 +667,8 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str, s: Stoi
     f.write("\n\n\n\n")
     f.write("end")
     
-
-def create_matlab_output(input_file: str, output_file: str, s: Stoich, species: list, rates: list, uniqueRates: list, v: bool = False):
-
-    Ns = len(s.species)
-    Nr = len(s.rates)
-   #species = [i.name for i in s.species.keys()]
-   #rates = [i for i in s.rates.keys()]
-    if v: print('\nOutput File: \n', output_file)
-    if v: print("\n")
-    #f = open(output_file,'w')
-    f = io.StringIO() #Let's us format the code to wrap after 80 characters;
-
-    f.write("function [time,y] = ")
-    f.write(output_file.strip(".m"))
-    f.write("(t_start,t_final)\n")
-    f.write("% Solves a system of ODEs from t=t_start to t=t_final \n")
-    f.write("% If no start time is given, then t_start = 0 \n")
-    f.write("% If no start or final time is given, then t_start = 0, t_final = 1 \n")
-    f.write("%\n")
-    f.write("%\n")
-    f.write("% This file was created by issuing command: \n")
-    f.write("%     python createMatlabFile.py ")
-    f.write(input_file)
-    f.write("\n")
-    f.write("%\n")
-    f.write("\n")
-    f.write("\nif nargin == 1\n")
-    f.write("     t_start = 0;  % Default start time is 0 \n")
-    f.write("elseif nargin == 0\n")
-    f.write("     t_start = 0; % Default start time is 0\n")
-    f.write("     t_final = 1; % Default final time is 1\n")
-    f.write("end\n\n\n")
-
-    f.write("% Kinetic Parameters \n")
-    for i in range(len(uniqueRates)):
-        f.write(uniqueRates[i])
-        f.write(" = 1; \n")
-
-    f.write("\np = [ ")
-    f.write(uniqueRates[0])
-    for i in range(1, len(uniqueRates)):
-        f.write(", ")
-        f.write(uniqueRates[i])
-    f.write(" ];\n\n\n")
-
     
-    f.write("% Initial Conditions \n")
-    for i in range(Ns):
-        f.write(transform_string(species[i]))
-        f.write("_IC")
-        f.write(" = 0; \n")
-
-    ##Line that's too long;
-    f.write("\ninit_cond = [ ")
-    f.write(transform_string(species[0]))
-    f.write("_IC")
-    for i in range(1,Ns):
-        f.write(", ")
-        f.write(transform_string(species[i]))
-        f.write("_IC")
-    f.write(" ];\n\n\n")
-
-    f.write("options = odeset('RelTol',1e-12,'AbsTol',1e-23);\n\n\n")
-
-    f.write("%-------------------------------- Main Solve -----------------------------%\n")
-    f.write("[time,y] = ode15s(@(t,y)RHS(t,y,p), [t_start t_final], init_cond, options);\n")
-    f.write("%-------------------------------------------------------------------------%")
-    f.write("\n\n\n")
-
-    f.write("% Rename solution components\n") ##Modify
-    for i in range(Ns):
-        f.write(transform_string(species[i]))
-        f.write(" = y(:,")
-        f.write(str(i+1))
-        f.write("); \n")
-
-    f.write("\n\n\n")
-
-    f.write("%  \n")
-    f.write("% Place plots or other calculations here\n")
-    f.write("%   \n")
-    f.write("% Example: \n")
-    f.write("% plot(time, ")
-    f.write(str(transform_string(species[0])))
-    f.write(", 'k-o', 'LineWidth', 4, 'MarkerSize', 4); legend('")
-    f.write(str(species[0]))
-    f.write("');\n\n\n")
-
-    f.write("end\n\n\n\n")
-
-    f.write("%-----------------------------------------------------%\n")
-    f.write("%-------------------- RHS Function -------------------%\n")
-    f.write("%-----------------------------------------------------%\n\n")
-
-
-    f.write("function dy = RHS(t,y,p)\n\n")
-    f.write("dy = zeros(")
-    f.write(str(Ns))
-    f.write(",1);\n")
-    f.write("\n\n")
-
-    f.write("% Rename Variables \n\n") ## Modify
-
-    for i in range(Ns):
-        f.write(str(transform_string(species[i])))
-        f.write("   = y(")
-        f.write(str(i+1))
-        f.write("); \n")
-    f.write("\n\n")
-
-    f.write("% Rename Kinetic Parameters \n")
-    for i in range(len(uniqueRates)):
-        f.write(str(uniqueRates[i]))
-        f.write(" = p(")
-        f.write(str(i+1))
-        f.write(");  \n")
-
-    f.write("\n\n")
-
-
-    f.write("\n\n")
-
-    f.write("% ODEs from reaction equations \n\n")
-
-    if v: print("Writing ODEs now....\n")
-
-    for i in range(Ns):
-        f.write("% ")
-        f.write(str(transform_string(species[i])))
-        f.write("\n dy(")
-        f.write(str(i+1))
-        f.write(")  =")
-        for j in range(Nr):
-            if (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) < 0):
-                f.write("  -  ")
-                f.write(str(rates[j]))
-                for k in range(Ns):
-                    if (not math.isnan(s.stoich[k][j])) and (int(s.stoich[k][j]) <= 0):
-                        f.write(" * ")
-                        f.write(transform_string(species[k]))
-                        if (abs(int(s.stoich[k][j])) != 1) and (s.stoich[k][j] != 0):
-                            f.write("^")
-                            f.write(str(abs(int(s.stoich[k][j]))))
-            elif (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) > 0):
-                f.write("  +  ")
-                f.write(str(rates[j]))
-                for k in range(Ns):
-                    if (not math.isnan(s.stoich[k][j])) and (int(s.stoich[k][j]) <= 0):
-                        f.write(" * ")
-                        if (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) > 1):
-                            f.write(str(int(s.stoich[i][j])))
-                            f.write(" * ")
-                        f.write(transform_string(species[k]))
-                        if (abs(int(s.stoich[k][j])) != 1) and (s.stoich[k][j] != 0):
-                            f.write("^")
-                            f.write(str(abs(int(s.stoich[k][j]))))
-            elif (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) == 0):
-                f.write("  +  ")
-                f.write(" 0 ")
-        if v: print(species[i]," complete")
-        f.write(";\n\n")
-
-
-    f.write("\n\n\n\n")
-    f.write("end")
-    
-    formatted_code = f.getvalue()
-    f.close()
-    
-    formatted_code_with_continuations = add_line_continuations(formatted_code)
-
-    # Write the formatted code to the file
-    with open(output_file, 'w') as file:
-        file.write(formatted_code_with_continuations)
-
+#To include to text-wrap in Matlab file when output. Not being used yet.
 def add_line_continuations(code: str, max_line_length: int = 80) -> str:
     lines = code.split('\n')
     new_lines = []
@@ -970,8 +772,6 @@ if verbose:
     print(f"DONE: Step 1 Parsed ")
     print('-' * 50)
 
-
-    
 # Define the output file names
 stoich_output_file   = f"{prefix}Stoich.csv"
 reactant_output_file = f"{prefix}Reactants.csv"
@@ -989,7 +789,6 @@ if verbose:
     for i in range(num_reactions_to_print):
         print(f"\t\t" + biochemicalReactions[i])
     print('-' * 50)
-
 
 
 ###########################################
@@ -1043,8 +842,13 @@ for reaction in parsed_reactions:
         species.extend(reaction.products)
 
 # Get unique entries
-unique_species = unique_entries_only(species)
-unique_rates   = unique_entries_only(rates)
+#unique_species = unique_entries_only(species)
+#unique_rates   = unique_entries_only(rates)
+
+unique_species = unique_entries_in_order(species)
+unique_rates   = unique_entries_in_order(rates)
+
+# Output Duplicate Rates
 
 #Note: We will need BOTH rates and unique_rates.
 #      The rates will be needed for the stoichiometric matrix.
@@ -1080,7 +884,7 @@ if specialVerbose:
 if verbose:
     print(f"Step 2: Creating Stoichiometry Matrix")
 
-unique_species.sort() #For ease in outputting; put variables in sorted order.
+#unique_species.sort() #For ease in outputting; put variables in sorted order.
 
 s = Stoich(unique_species,parsed_reactions)
 
@@ -1158,6 +962,7 @@ if verbose:
 bad_rates = s.check_rates()
 
 if len(bad_rates) > 0:
+    if verbose: print(f"We have some rates with different dimensions.")
     for rate, column_sum in bad_rates.items():
         if verbose: print(f"Rate {rate}: Sum of columns = {column_sum}")
 else:

@@ -6,8 +6,8 @@ B = 1.0  #\mu M
  -> A, k_0
 B ->, d
 A + 2 * B -> C , k_1
-A + B -> A + C, k_6
-A + 2 * B <-> D , k_1 , k_2
+A + B -> A + C, k_6=0.2
+A + 2 * B <-> D , k_1=1 , k_2=10
 D + E -> F , k_3
 X + Y , k_4  # Invalid: missing direction
 Z <-> W , k_5 # Invalid: missing third rate
