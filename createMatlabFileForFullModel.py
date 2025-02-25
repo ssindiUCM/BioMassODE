@@ -721,7 +721,8 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
                 f.write("  -  ")
                 f.write(str(rates[j])) #Reaction Rate
                 #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
-                if isLipidReaction: #This must be a koff
+                #if isLipidReaction: #This must be a koff
+                if isLipidReaction and not isLipidSpecies:
                     f.write("/")
                     f.write(str(parsed_reactions[j].numberBindingSites))
                 for k in range(Ns):
