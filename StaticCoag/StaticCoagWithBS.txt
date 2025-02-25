@@ -1,0 +1,466 @@
+# Comments: 
+# Goal: We will include active/inactive lipid. We have 2 sets of equation in parallel for La and Li. 
+# La/Li will be set at the beginning based on experimental prep.
+# L_TF (L_noTF) for lipid binding sites on vesicles with (without) TF  
+# SN for negatively charged surface (Silica)
+# Kinetic rates are named for what they do
+# - ka: association, if on a surface ka_s 
+# - kd: dissociation, if on a surface kd_s
+# - kc: kcat
+# - kon/koff: binding and unbinding to lipid
+# - ka_on_s: binding of species from solution to species on surface
+# - kd_off_s: unbinding of a species to solution from surface complex
+# - ka_on_sn: binding of species from solution to species on negatively charged surface(silica)
+# - k_p1/m1: The Kunitz domain for the complex; Xa:TFPI:TF:VIIa
+# Naming Conventions: 
+# VII          In solution (no suffix)
+# VII_st       On Lipid surface with TF (L_TF)
+# VII_s        On Lipid surface without TF (L_noTF)
+# VII_sn       Direct binding to negatively charged surface (silica)
+# 
+# In a complex, all species taking up a binding site have an _st or _s
+
+
+# Enzyme first
+# E + S <-> ES
+# E + I <-> EI
+# TF always first
+# cofactors always first: TF:VIIa, VIIIa:IXa, Va:Xa
+
+
+# Last updated January 13, 2025 by Lexi, Tracey, Karin to include intrinsic pathway reaction module
+# Last updated February 25, 2025 by Suzanne & Tracey to include binding sites
+
+###########################
+# Lipid Binding Reactions #
+###########################
+# II/IIf (IIa doesn’t bind to lipid)
+L_TF + II <-> II_st, kon_ii, koff_ii, nbs_ii
+L_noTF + II <-> II_s, kon_ii, koff_ii, nbs_ii
+L_TF + IIf <-> IIf_st, kon_iif, koff_iif, nbs_ii
+L_noTF + IIf <-> IIf_s, kon_iif, koff_iif, nbs_ii
+
+
+# V/Vh/Va
+L_TF + V <-> V_st, kon_v, koff_v, nbs_v
+L_noTF + V <-> V_s, kon_v, koff_v, nbs_v
+L_TF + Vh <-> Vh_st, kon_vh, koff_vh, nbs_v
+L_noTF + Vh <-> Vh_s, kon_vh, koff_vh, nbs_v
+L_TF + Va <-> Va_st, kon_va, koff_va, nbs_v
+L_noTF + Va <-> Va_s, kon_va, koff_va, nbs_v
+
+
+# VII/VIIa
+L_TF + VII <-> VII_st, kon_vii, koff_vii, nbs_vii
+L_noTF + VII <-> VII_s, kon_vii, koff_vii, nbs_vii
+L_TF + VIIa <-> VIIa_st, kon_viia, koff_viia, nbs_vii
+L_noTF + VIIa <-> VIIa_s, kon_viia, koff_viia, nbs_vii
+
+
+# VIII/VIIIa
+L_TF + VIII <-> VIII_st, kon_viii, koff_viii, nbs_viii
+L_noTF + VIII <-> VIII_s, kon_viii, koff_viii, nbs_viii
+L_TF + VIIIa <-> VIIIa_st, kon_viiia, koff_viiia, nbs_viii
+L_noTF + VIIIa <-> VIIIa_s, kon_viiia, koff_viiia, nbs_viii
+
+
+# IX/IXa
+L_TF + IX <-> IX_st, kon_ix, koff_ix, nbs_ix
+L_noTF + IX <-> IX_s, kon_ix, koff_ix, nbs_ix
+L_TF + IXa <-> IXa_st, kon_ixa, koff_ixa, nbs_ixa
+L_noTF + IXa <-> IXa_s, kon_ixa, koff_ixa, nbs_ixa
+
+
+# X/Xa
+L_TF + X <-> X_st, kon_x, koff_x, nbs_x
+L_noTF + X <-> X_s, kon_x, koff_x, nbs_x
+L_TF + Xa <-> Xa_st, kon_xa, koff_xa, nbs_x
+L_noTF + Xa <-> Xa_s, kon_xa, koff_xa, nbs_x
+
+
+# Xa:TFPI on and off both surfaces 
+Xa:TFPI + L_TF <-> Xa_st:TFPI, kon_tfpixa, koff_tfpixa, nbs_tfpixa
+Xa:TFPI + L_noTF <-> Xa_s:TFPI, kon_tfpixa, koff_tfpixa, nbs_tfpixa
+
+
+# Vh:TFPI on and off both surfaces
+TFPI:Vh + L_TF <-> TFPI:Vh_st, kon_tfpivh, koff_tfpivh, nbs_tfpivh
+TFPI:Vh + L_noTF <-> TFPI:Vh_s, kon_tfpivh, koff_tfpivh, nbs_tfpivh
+
+# AT complexes in solution binding both surfaces
+IXa:AT + L_noTF <-> IXa_s:AT, kon_ixat, koff_ixat, nbs_ixaAT
+IXa:AT + L_TF <-> IXa_st:AT, kon_ixat, koff_ixat, nbs_ixaAT
+Xa:AT + L_noTF <-> Xa_s:AT, kon_xaat, koff_xaat, nbs_xaAT
+Xa:AT + L_TF <-> Xa_st:AT, kon_xaat, koff_xaat, nbs_xaAT
+
+# PS
+L_TF + PS <-> PS_st, kon_ps, koff_ps, nbs_PS
+L_noTF + PS <-> PS_s, kon_ps, koff_ps, nbs_PS
+
+################
+# TF reactions #
+################
+
+
+# VIIa binding TF
+TF + VII_st <-> TF:VII_st,   ka_s_tf_vii,  kd_s_tfvii
+TF + VIIa_st <-> TF:VIIa_st, ka_s_tf_viia, kd_s_tfviia
+
+
+# IX Activation by TF:VIIa 
+IX_st + TF:VIIa_st <-> IX_st:TF:VIIa_st, ka_s_ix_tfviia, kd_s_ixtfviia
+IX_st:TF:VIIa_st -> IXa_st + TF:VIIa_st, kc_s_ixtfviia
+
+
+# X Activation by TF:VIIa (Rxns 1, 2, 3)
+X_st + TF:VIIa_st <-> TF:VIIa_st:X_st, ka_s_x_tfviia, kd_s_xtfviia
+TF:VIIa_st:X_st -> TF:VIIa_st:Xa_st, kc_s_xtfviia
+Xa_st + TF:VIIa_st <-> TF:VIIa_st:Xa_st, ka_s_xa_tfviia, kd_s_xatfviia
+
+
+# Activation of TF:VII by Xa 
+Xa_st + TF:VII_st <-> TF:VII_st:Xa_st, ka_s_xa_tfvii, kd_s_xatfvii
+TF:VII_st:Xa_st -> TF:VIIa_st:Xa_st, kc_s_xatfvii
+
+
+## 1/13/25 – Karin comment
+# TF:VII_st:Xa_st -> TF:VIIa_st + Xa_st, kc_s_xatfvii ???????
+
+
+#########################
+# TFPI and Xa Reactions #
+#########################
+
+
+#Assumptions
+#(1) The PIE, EPI always occupies 2 lipid sites
+#(2) Xa must bind to the surface first. 
+#(3) TFPI can bind to either free (Xa) or surface bound Xa_st or 
+#    TF:VIIa_st:Xa_st, 
+#(4) Xa:TFPI binds to surface first through Xa, then to TF:VIIa_st
+#(5) TF:VIIa_st:Xa_st:TFPI <-> Xa_st:TFPI:TF:VIIa_st (EPI <-> PIE)
+#(6) The complex comes apart the same way.
+
+
+#Notes:
+#“_{ST}” means surface bound
+
+
+# Xa + TFPI <-> Xa:TFPI (in solution, and both surfaces; Rxn 4) 
+##Xa_st + TFPI <-> Xa_st:TFPI, ka_on_s_tfpi_xa, kd_off_s_tfpiixa 
+###notice tfpiixa 1/13/25
+
+
+Xa_st + TFPI <-> Xa_st:TFPI, ka_on_s_tfpi_xa, kd_off_s_tfpixa 
+Xa_s + TFPI <-> Xa_s:TFPI, ka_on_s_tfpi_xa, kd_off_s_tfpixa
+Xa + TFPI <-> Xa:TFPI, ka_tfpi_xa, kd_tfpixa
+
+
+#(Rxn 8, two sites); P:I + E <-> E:P:I
+#Two lipid bound complexes bind: TFPI:Xa_st, TF:VIIa_st 
+Xa_st:TFPI + TF:VIIa_st <-> TF:VIIa_st:Xa_st:TFPI, ka_s_tfpixa_tfviia, kd_s_tfviiaxatfpi
+
+
+#E:P:I <-> P:I:E (2 lipid binding sites; Rxn 7)
+#New Rxn (1): Does this happen with both quaternary complexes?
+TF:VIIa_st:Xa_st:TFPI <-> Xa_st:TFPI:TF:VIIa_st, k_p1_tfviiaxatfpi, k_m1_xatfpitfviia
+
+
+# I + E:P <-> E:P:I; Rxn 6  (2 lipid binding sites)
+TFPI + TF:VIIa_st:Xa_st <-> TF:VIIa_st:Xa_st:TFPI, ka_on_s_tfpi_tfviiaxa, kd_off_s_tfviiaxatfpi 
+ 
+
+
+##########################
+# Surface reactions (TF) #
+##########################
+
+
+# Xa activation of V
+Xa_st + V_st <-> Xa_st:V_st, ka_s_xa_v, kd_s_xav
+Xa_st:V_st -> Xa_st + Vh_st, kc_s_xav
+
+
+# Xa activation of VII
+Xa_st + VII_st <-> Xa_st:VII_st, ka_s_xa_vii, kd_s_xavii
+Xa_st:VII_st -> Xa_st + VIIa_st, kc_s_xavii
+
+
+# Xa activation of VIII
+Xa_st + VIII_st <-> Xa_st:VIII_st, ka_s_xa_viii, kd_s_xaviii
+Xa_st:VIII_st -> Xa_st + VIIIa_st, kc_s_xaviii
+
+
+# Tenase formation
+VIIIa_st + IXa_st <-> VIIIa_st:IXa_st, ka_s_viiia_ixa, kd_s_viiiaixa
+
+
+# X binding Tenase and getting activated
+X_st + VIIIa_st:IXa_st <-> X_st:VIIIa_st:IXa_st, ka_s_x_viiiaixa, kd_s_xviiiaixa
+X_st:VIIIa_st:IXa_st -> Xa_st + VIIIa_st:IXa_st, kc_s_xviiiaixa
+
+
+# Prothrombinase formation (Vh)
+Xa_st + Vh_st <-> Xa_st:Vh_st, ka_s_xa_vh, kd_s_xavh
+
+
+# Thrombin formation (Vh)
+II_st + Xa_st:Vh_st <-> II_st:Xa_st:Vh_st, ka_s_ii_xavh, kd_s_iixavh
+II_st:Xa_st:Vh_st -> IIa + IIf_st + Xa_st:Vh_st, kc_s_iixavh
+
+
+# Thrombin activation of V/Vh on surface 
+# Thrombin doesn’t bind lipid, prothrombin does
+IIa + V_st <-> IIa:V_st, ka_on_s_iia_v, kd_off_s_iiav
+IIa:V_st -> IIa + Va_st, kc_s_iiav
+IIa + Vh_st <-> IIa:Vh_st, ka_on_s_iia_vh, kd_off_s_iiavh
+IIa:Vh_st -> IIa + Va_st, kc_s_iiavh
+
+
+# Thrombin activation of VIII on surface
+IIa + VIII_st <-> IIa:VIII_st, ka_on_s_iia_viii, kd_off_s_iiaviii
+IIa:VIII_st -> IIa + VIIIa_st, kc_s_iiaviii
+
+
+# XIa binding to and activating IX
+# XI/XIa also doesn’t bind directly to lipid
+XIa + IX_st <-> XIa:IX_st, ka_on_s_xia_ix, kd_off_s_xiaix
+XIa:IX_st -> XIa + IXa_st, kc_s_xiaix
+
+
+# Prothrombinase formation (Va)
+Xa_st + Va_st <-> Xa_st:Va_st, ka_s_xa_va, kd_s_xava
+
+
+# Thrombin formation (with Xa:Va)
+II_st + Xa_st:Va_st <-> II_st:Xa_st:Va_st, ka_s_ii_xava, kd_s_iixava
+II_st:Xa_st:Va_st -> IIa + IIf_st + Xa_st:Va_st, kc_s_iixava
+
+
+# IXa activation of X
+IXa_st + X_st <-> IXa_st:X_st, ka_s_ixa_x, kd_s_ixax
+IXa_st:X_st -> IXa_st + Xa_st, kc_ixax
+
+
+#############################
+# Surface reactions (no TF) #
+#############################
+
+# Xa activation of V
+Xa_s + V_s <-> Xa_s:V_s, ka_s_xa_v, kd_s_xav
+Xa_s:V_s -> Xa_s + Vh_s, kc_xav
+
+
+# Xa activation of VII
+Xa_s + VII_s <-> Xa_s:VII_s, ka_s_xa_vii, kd_s_xavii
+Xa_s:VII_s -> Xa_s + VIIa_s, kc_xaviii
+
+
+# Xa activation of VIII
+Xa_s + VIII_s <-> Xa_s:VIII_s, ka_s_xa_viii, kd_s_xaviii
+Xa_s:VIII_s -> Xa_s + VIIIa_s, kc_xaviii
+
+
+# Tenase formation
+VIIIa_s + IXa_s <-> VIIIa_s:IXa_s, ka_s_viiia_ixa, kd_s_viiiaixa
+
+
+# X binding Tenase and getting activated
+X_s + VIIIa_s:IXa_s <-> X_s:VIIIa_s:IXa_s, ka_s_x_viiiaixa, kd_s_xviiiaixa
+X_s:VIIIa_s:IXa_s -> Xa_s + VIIIa_s:IXa_s, kc_s_xviiiaixa
+
+
+# Prothrombinase formation (Vh)
+Xa_s + Vh_s <-> Xa_s:Vh_s, ka_s_xa_vh, kd_s_xavh
+
+# Thrombin formation (Vh)
+II_s + Xa_s:Vh_s <-> II_s:Xa_s:Vh_s, ka_s_ii_xavh, kd_s_iixavh
+II_s:Xa_s:Vh_s -> IIa + IIf_s + Xa_s:Vh_s, kc_s_iixavh
+
+# Thrombin activation of V/Vh on surface
+IIa + V_s <-> IIa:V_s, ka_on_s_iia_v, kd_off_s_iiav
+IIa:V_s -> IIa + Va_s, kc_s_iiav
+IIa + Vh_s <-> IIa:Vh_s, ka_on_s_iia_vh, kd_off_s_iiavh
+IIa:Vh_s -> IIa + Va_s, kc_s_iiavh
+
+# Thrombin activation of VIII on surface
+IIa + VIII_s <-> IIa:VIII_s, ka_on_s_iia_viii, kd_off_s_iiaviii
+IIa:VIII_s -> IIa + VIIIa_s, kc_s_iiaviii
+
+# XIa binding to and activating IX
+XIa + IX_s <-> XIa:IX_s, ka_on_s_xia_ix, kd_off_s_xiaix
+XIa:IX_s -> XIa + IXa_s, kc_s_xiaix
+
+# Prothrombinase formation (Va)
+Xa_s + Va_s <-> Xa_s:Va_s, ka_s_xa_va, kd_s_xava
+
+# Thrombin formation (Va)
+II_s + Xa_s:Va_s <-> II_s:Xa_s:Va_s, ka_s_ii_xava, kd_s_iixava
+II_s:Xa_s:Va_s -> IIa + IIf_s + Xa_s:Va_s, kc_s_iixava
+
+# IXa activation of X
+IXa_s + X_s <-> IXa_s:X_s, ka_s_ixa_x, kd_s_ixax
+IXa_s:X_s -> IXa_s + Xa_s, kc_s_ixax
+
+######################
+# Solution Reactions #
+######################
+
+# Xa activation of V
+Xa + V <-> Xa:V, ka_xa_v, kd_xav
+Xa:V -> Xa + Vh, kc_xav
+
+# Xa activation of VII
+Xa + VII <-> Xa:VII, ka_xa_vii, kd_xavii
+Xa:VII -> Xa + VIIa, kc_xavii
+
+# Xa activation of VIII
+Xa + VIII <-> Xa:VIII, ka_xa_viii, kd_xaviii
+Xa:VIII -> Xa + VIIIa, kc_xaviii
+
+# Thrombin activation of V/Vh 
+IIa + V <-> IIa:V, ka_iia_v, kd_iiav
+IIa:V -> IIa + Va, kc_iiav
+IIa + Vh <-> IIa:Vh, ka_iia_vh, kd_iiavh
+IIa:Vh -> IIa + Va, kc_iiavh
+
+# Thrombin activation of VIII
+IIa + VIII <-> IIa:VIII, ka_iia_viii, kd_iiaviii
+IIa:VIII -> IIa + VIIIa, kc_iiaviii
+
+# XIa binding to and activating IX
+XIa + IX <-> XIa:IX, ka_xia_ix, kd_xiaix
+XIa:IX -> XIa + IXa, kc_xiaix
+
+# IIa binding to and activating XI
+IIa + XI <-> IIa:XI, ka_iia_xi, kd_iiaxi
+IIa:XI -> IIa + XIa, kc_iiaxi
+
+# IXa activation of X
+IXa + X <-> IXa:X, ka_ixa_x, kd_ixax
+IXa:X -> IXa + Xa, kc_ixax
+
+#########################
+# TFPI and Vh Reactions #
+#########################
+
+
+# TFPI (solution) binding with Vh (all)
+TFPI + Vh <-> TFPI:Vh, ka_tfpi_vh, kd_tfpivh
+TFPI + Vh_s <-> TFPI:Vh_s, ka_on_s_tfpi_vh, kd_off_s_tfpivh
+TFPI + Vh_st <-> TFPI:Vh_st, ka_on_s_tfpi_vh, kd_off_s_tfpivh
+
+
+# TFPI (solution) binding with Xa within Xa:Vh (surface) 
+TFPI + Xa_s:Vh_s <-> TFPI:Xa_s:Vh_s, ka_on_s_tfpi_xa, kd_off_s_tfpixa
+TFPI + Xa_st:Vh_st <-> TFPI:Xa_st:Vh_st, ka_on_s_tfpi_xa, kd_off_s_tfpixa
+
+
+# TFPI (solution) binding with Vh within Xa:Vh (surface)
+TFPI + Xa_s:Vh_s <-> Xa_s:Vh_s:TFPI, ka_on_s_tfpi_vh, kd_off_s_tfpivh
+TFPI + Xa_st:Vh_st <-> Xa_st:Vh_st:TFPI, ka_on_s_tfpi_vh, kd_off_s_tfpivh
+
+
+# Xa:TFPI (solution) TFPI binding with Vh (all)
+Xa:TFPI + Vh <-> Vh:TFPI:Xa, ka_tfpi_vh, kd_tfpivh
+Xa:TFPI + Vh_s <-> Vh_s:TFPI:Xa, ka_on_s_tfpixa_vh, kd_off_s_tfpixavh
+Xa:TFPI + Vh_st <-> Vh_st:TFPI:Xa,ka_on_s_tfpixa_vh,kd_off_s_tfpixavh
+
+
+# Xa:TFPI (surface) binding with Vh (surface)
+Xa_s:TFPI + Vh_s <-> Vh_s:TFPI:Xa_s, ka_s_tfpixa_vh, kd_s_tfpixavh
+Xa_st:TFPI + Vh_st <-> Vh_st:TFPI:Xa_st,ka_s_tfpixa_vh, kd_s_tfpixavh
+
+
+# TFPI:Vh (solution) TFPI binding with Xa (all)
+TFPI:Vh + Xa <-> Vh:TFPI:Xa, ka_tfpi_xa, kd_tfpixa
+TFPI:Vh + Xa_s <-> Vh:TFPI:Xa_s, ka_on_s_tfpi_xa, kd_off_s_tfpixa
+TFPI:Vh + Xa_st <-> Vh:TFPI:Xa_st, ka_on_s_tfpi_xa, kd_off_s_tfpixa
+
+
+# TFPI:Vh (surface) binding with Xa (surface)
+TFPI:Vh_s + Xa_s <-> Vh_s:TFPI:Xa_s, ka_s_tfpivh_xa, kd_s_tfpivhxa
+TFPI:Vh_st + Xa_st <-> Vh_st:TFPI:Xa_st,ka_s_tfpivh_xa, kd_s_tfpivhxa
+
+
+################
+# AT Reactions #
+################
+
+
+# AT reactions
+IIa + AT <-> IIa:AT, ka_iia_at, kd_iiaat
+IXa + AT <-> IXa:AT, ka_ixa_at, kd_ixaat
+IXa_s + AT <-> IXa_s:AT, ka_on_s_ixa_at, kd_off_s_ixaat
+IXa_st + AT <-> IXa_st:AT, ka_on_s_ixa_at, kd_off_s_ixaat
+Xa + AT <-> Xa:AT, ka_xa_at, kd_xaat
+Xa_s + AT <-> Xa_s:AT, ka_on_s_xa_at, kd_off_s_xaat
+Xa_st + AT <-> Xa_st:AT, ka_on_s_xa_at, kd_off_s_xaat
+XIa + AT <-> XIa:AT, ka_xia_at, kd_xiaat
+
+
+## TF:VIIa inactivation by AT???? KL 1/13/25
+
+
+################################################
+# Intrinsic (Contact) Pathway Reactions Module #
+################################################
+
+# XII binding to SN
+XII + SN <-> XII_sn, kon_sn_xii, koff_sn_xii 
+XIIa + SN <-> XIIa_sn, kon_sn_xiia, koff_sn_xiia 
+
+# XII auto-activations
+XIIa_sn + XII_sn <-> XIIa_sn:XII_sn, ka_sn_xiia_xii, kd_sn_xiiaxii 
+XIIa_sn:XII_sn -> XIIa_sn + XIIa_sn, kc_sn_xiiaxii 
+XII_sn -> XIIa_sn, kc_sn_xii 
+
+# XIIa activation of PK
+XIIa + PK <-> XIIa:PK, ka_xiia_pk, kd_xiiapk
+XIIa:PK -> PKa + XIIa, kc_xiiapk
+
+# PKa activation of XII
+PKa + XII <-> PKa:XII, ka_pka_xii, kd_pkaxii
+PKa:XII -> PKa + XIIa, kc_pkaxii 
+
+# XIIa activation of XI
+XIIa + XI <-> XIIa:XI, ka_xiia_xi, kd_xiiaxi
+XIIa:XI -> XIIa + XIa, kc_xiiaxi 
+
+#PKa activation of IX
+PKa + IX <-> PKa:IX, ka_pka_ix, kd_pkaix
+PKa:IX -> PKa + IXa, kc_pkaix
+
+#Inhibition by AT
+XIIa_sn + AT -> XIIa_sn:AT, ka_sn_xiia_at 
+XIIa + AT -> XIIa:AT, ka_xiia_at 
+
+#Inhibition by C1INH
+XIa + C1INH -> XIa:C1INH, ka_xia_c1inh 
+XIIa + C1INH -> XIIa:C1INH, ka_xiia_c1inh 
+XIIa_sn + C1INH -> XIIa_sn:C1INH, ka_sn_xiia_c1inh 
+PKa + C1INH -> PKa:C1INH, ka_pka_c1inh 
+
+#PKa activation of IX lipid                             ##DISCUSS Should we look at this? 
+PKa + IX_s <-> PKa:IX_s, ka_s_pka_ix, kd_s_pkaix
+PKa:IX_s -> PKa + IXa_s, kc_s_pkaix
+
+#XIIa_sn activation of XI:HK
+XI + HK <-> XI:HK, ka_xi_hk, kd_xihk
+XI:HK + SN <-> XI:HK_sn, kon_sn_xihk, koff_sn_xihk 
+XI:HK_sn  + XIIa_sn <-> XI:HK_sn:XIIa_sn, ka_sn_xihk_xiia, kd_sn_xihkxiia
+XI:HK_sn:XIIa_sn -> XIa:HK_sn + XIIa_sn, kc_sn_xihkxiia
+XIa:HK_sn -> XIa + HK + SN, koff_sn_xiahk
+ 
+#XIIa_sn activation of PK:HK
+PK + HK <-> PK:HK, ka_pk_hk, kd_pkhk
+PK:HK  + SN <-> PK:HK_sn, kon_sn_pkhk, koff_sn_pkhk 
+PK:HK_sn + XIIa_sn <-> PK:HK_sn:XIIa_sn, ka_sn_pkhk_xiia, kd_sn_pkhkxiia
+PK:HK_sn:XIIa_sn -> PKa:HK_sn + XIIa_sn, kc_sn_pkhkxiia
+PKa:HK_sn -> HKa + PKa + SN + BK, koff_sn_pkahk_split
+
+#PKa:HK activation of XII_sn
+PKa + HK <-> PKa:HK, ka_pka_hk, kd_pkahk 
+PKa:HK  + SN <-> PKa:HK_sn, kon_sn_pkahk, koff_sn_pkahk 
+PKa:HK_sn + XII_sn <-> PKa:HK_sn:XII_sn, ka_sn_pkahk_xii, kd_sn_pkahkxii
+PKa:HK_sn:XII_sn -> PKa + HK + XIIa_sn + SN, kc_sn_pkahkxii
