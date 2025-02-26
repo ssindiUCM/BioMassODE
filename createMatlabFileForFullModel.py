@@ -708,6 +708,9 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     for i in range(Ns):
         speciesName = species[i]
         isLipidSpecies = "L_noTF" in speciesName or "L_TF" in speciesName
+        isOnEmptyLipid = "_s" in speciesName and (not "_st" in speciesName) and (not "_sn" in speciesName)
+        isOnTFLipid = "_st" in speciesName
+        isOnSilica = "_sn" in speciesName
         f.write("% ")
         f.write(str(transform_string(species[i])))
         f.write("\n dy(")
@@ -722,7 +725,11 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
                 f.write(str(rates[j])) #Reaction Rate
                 #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
                 #if isLipidReaction: #This must be a koff
-                if isLipidReaction and not isLipidSpecies:
+                # V_s -> V + L; L is correct
+                # (V_s)_dt = -rate
+                # (V)_dt   = +rate
+                # L_dt     = +rate*nbs
+                if isLipidReaction and not (isLipidSpecies or isOnEmptyLipid or isOnTFLipid): #V_s
                     f.write("/")
                     f.write(str(parsed_reactions[j].numberBindingSites))
                 for k in range(Ns):
@@ -739,6 +746,9 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
                 #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
                 if isLipidSpecies: #This must be a koff
                     f.write("*")
+                    f.write(str(parsed_reactions[j].numberBindingSites))
+                if isLipidReaction and ( not isLipidSpecies ) and (isOnEmptyLipid or isOnTFLipid): #V_s
+                    f.write("/")
                     f.write(str(parsed_reactions[j].numberBindingSites))
                 for k in range(Ns):
                     ##Double check that this makes sense; perhaps should be reactants.

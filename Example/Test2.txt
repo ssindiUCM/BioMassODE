@@ -1,0 +1,2 @@
+L_TF + V <-> V_s, kon, koff, nbs_v
+A + B -> C, k1
