@@ -245,10 +245,6 @@ IXa_st + X_st <-> IXa_st:X_st, ka_s_ixa_x, kd_s_ixax
 IXa_st:X_st -> IXa_st + Xa_st, kc_ixax
 
 
-
-
-
-
 #############################
 # Surface reactions (no TF) #
 #############################

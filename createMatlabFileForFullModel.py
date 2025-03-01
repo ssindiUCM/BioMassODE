@@ -53,8 +53,7 @@ if len(sys.argv) < 2:
         1) Allow for setting a non-mass action term for lipid binding
         L_TF + II <-> II_st, kon_ii, koff_ii, nbs_ii
 
-        Forward Rate of this Rxn: (kon_ii/nbs_ii)*[L_TF]*[II] (in both)
-        Reverse Rate of this Rxn: koff_ii*nbs_ii*[II_st] (in Lipid Eqn, not II_st)
+        kon_ii is in units of: 1/(concentration*time*bs) 
        
     In progress (01/13/2025):
     1) Allows for specifying the value of the kinetic rates in the reacitons:
@@ -124,7 +123,6 @@ def unique_entries_in_order(lst):
     seen = set()
     return [x for x in lst if not (x in seen or seen.add(x))]
 
-    
 
 def formatFwdReaction(reactants, reactant_coeffs, products, product_coeffs):
     # Join reactants with their coefficients

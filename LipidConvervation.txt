@@ -25,10 +25,10 @@ Lst_Sites =
 + (nbs_x + nbs_viii + nbs_ixa) * X_stbVIIIa_stbIXa_st 
 + (nbs_x+ nbs_v) * Xa_stbVh_st 
 + (nbs_ii + nbs_x+ nbs_v) * II_stbXa_stbVh_st 
-+ (nbs_v)*IIabV_st 
-+ (nbs_v)*IIabVh_st 
-+ (nbs_viii)*IIabVIII_st 
-+ (nbs_ix)*XIabIX_st 
++ (nbs_v) * IIabV_st 
++ (nbs_v) * IIabVh_st 
++ (nbs_viii) * IIabVIII_st 
++ (nbs_ix) * XIabIX_st 
 + (nbs_x + nbs_v) * Xa_stbVa_st 
 + (nbs_ii + nbs_x + nbs_v) * II_stbXa_stbVa_st 
 + (nbs_ixa + nbs_x) * IXa_stbX_st 

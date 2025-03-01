@@ -1,2 +1,4 @@
-L_TF + V <-> V_s, kon, koff, nbs_v
+L_TF + V <-> V_s, kon1, koff1, nbs_v
+L_TF + X <-> X_s, kon2, koff2, nbs_x
+V_s + X_s <-> X_s:V_s, kon3, koff3
 A + B -> C, k1
