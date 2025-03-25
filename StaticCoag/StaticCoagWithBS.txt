@@ -77,11 +77,9 @@ L_noTF + X <-> X_s, kon_x, koff_x, nbs_x
 L_TF + Xa <-> Xa_st, kon_xa, koff_xa, nbs_x
 L_noTF + Xa <-> Xa_s, kon_xa, koff_xa, nbs_x
 
-
 # Xa:TFPI on and off both surfaces 
 Xa:TFPI + L_TF <-> Xa_st:TFPI, kon_tfpixa, koff_tfpixa, nbs_tfpixa
 Xa:TFPI + L_noTF <-> Xa_s:TFPI, kon_tfpixa, koff_tfpixa, nbs_tfpixa
-
 
 # Vh:TFPI on and off both surfaces
 TFPI:Vh + L_TF <-> TFPI:Vh_st, kon_tfpivh, koff_tfpivh, nbs_tfpivh
