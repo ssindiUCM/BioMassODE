@@ -12,86 +12,85 @@ from collections import defaultdict
 # Check if the correct number of arguments is provided
 if len(sys.argv) < 2:
     print(textwrap.dedent("""
-    
-    Python code that generates a Matlab Code for Law of Mass action Reactions
-    
-    Use: python3 createMatlabFile.py StaticCoag.txt
 
-    StaticCoag.txt:
-    - Can contain comments that are proceeded with "#" (will be ignored)
-    - On any line, anything after a "#" will be ignored
-    - Can contain whitespace (will be ignored)
-    - Two types of structure are allowed for biochemical reactions: Forward, Reversible
-    - Can set kinetic rate values when defining biochemical reactions.
-        
-    SINGLE_REACTION , RATE_VARIABLE
-    ex:
-        A + 2 * B -> C , k_1
+    Python script to generate MATLAB code for Coagulation Biochemical Reactions.
 
-    In the case of reversible reactions, two rates must be specified, the forward reaction
-        is always FIRST, eg:
+    Usage:
+        python3 createCoagModel.py StaticCoag.txt
 
-        A + 2 * B <-> C , k_1 , k_2
+    Input File: StaticCoag.txt (List of Biochemical Reactions)
     
-    **Warning: Any invalid reactions will be skipped (and output to the screen).
-  
-    Output File: StaticCoagMatlab.m (assumes prefix).
+    Output File(s): Separates outputs for initial conditions, parameters, and code.
+        (Assumes prefix based on input file)
+        - StaticCoagMatlab.m (assumes prefix).
+        - StaticCoagIC.m
+        - StaticCoagParams.m
+        - StaticCoagRename.m
 
-    Requirements:
-        1) Only the operators '*', '+', '<->', and '->' are allowed
-        2) Reactions should be pre-simplified, this code will NOT reduce algebra
-        3) Species names can only contain [0-9a-zA-Z_:]
-        4) Species names MUST begin with a letter - no leading numbers allowed
-        
+    -*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*-
     
-    New Features (01/13/2024):
-        1) Can set initial conditions within the equations file.
-        2) Should output species and rates in order they are in the input file.
-       
-    
-    New Features (02/25/2025):
-        1) Allow for setting a non-mass action term for lipid binding
-        L_TF + II <-> II_st, kon_ii, koff_ii, nbs_ii
+    Input File Specifications:
+    -----------------------------------
+    - Assumes  biochemical reactions (one per line) of the form:
+            LHS <-> RHS, Rates, TYPE
+    - Comments/Whitespace: Anything following "#" is ignored; Whitespace is ignored.
+    - Supports forward and reversible reactions.
+    - Reaction Operators allowed: '*', '+', '<->', '->'
+    - Species names may contain: [0-9a-zA-Z_:]
+    - Species names must start with a letter (no leading numbers).
 
-        kon_ii is in units of: 1/(concentration*time*bs) 
-       
-    In progress (01/13/2025):
-    1) Allows for specifying the value of the kinetic rates in the reacitons:
-            Allowable:
-                A + B -> C, k1=0.1
-                A + B <-> C, kon, koff=100
-                
-    MIGHT NOT BE VALID
-    
-        New Features (08/19/2024):
-        1) Allows for pure synthesis or pure degradation. ( -> A, B ->)
-        2) Handles comments/white space in the biochemical equation file.
-        3) Handles duplicate kinetic rates (i.e., p vector is consolidated)
-        4) Handles A + B -> A + C reactions (splits stochiometric matrix)
-        5) Checks for (and removes) duplicate reactions. (i.e., identical reaction)
-            -> Even if the reaction is 1 side of a bi-directional reaction.
-        6) Checks that the dimension of reactions rates is the SAME (?).
-    
-    Coag Specific Changes:
-        1) Creates variables to track active and in-active bound lipid sites (s and _st)
-            -> Counts the number of "s" and "st" in each species name.
-        2) Separately creates outputs for initial conditions, parameters and code.
-            -> Could do a --coag flag = false to do the original mode.
-        
-    Other Features to Consider:
-        1) Keep the species/rates in the same order the StaticCoag.txt file was in <-Helpful
-            -> Currently sorting species alphabetically, rates are not in any particular order.
-        2) Set the rates of reactions and initial conditions based on a file. <- Helpful
-            -> Could have a user input values (separate file) and use 1 for missing values.
-        3) Original version allowed "=" operator. Not sure what this was for.
-        4) Text wrap for the long lines in Matlab. (Currently half-implemented)
+    - 4 Reaction Types:
+        * MASS_ACTION: Default (if no type given)
+        * LIPID: Binding on/off lipid (competition)
+        * PLATELET: Binding on/off platelet (no competition)
+        * FLOW: species entering or exiting reaction zone.
+        * DILUTION: concentration changing due to reaction zone
+
+    Example Reactions:
+        A + 2 * B -> C , k_1 #Forward
+        A + 2 * B <-> C , k_1 , k_2 #Reversible
+
+    Lipid Binding Support:
+        - Allows non-mass action terms for lipid binding:
+            L_TF + II <-> II_st, kon_ii, koff_ii, nbs_ii, LIPID
+        - kon_ii units: 1/(concentration * time * binding sites)
+
+    Supported Features:
+    -----------------------------------
+      - Support for non-mass action lipid/platlet binding.
+      - Outputs Species and rates output in input order.
+      - Supports pure synthesis/degradation (e.g., "-> A", "B ->").
+      - Consolidates duplicate kinetic rates.
+      - Splits stoichiometric matrix for A + B -> A + C reactions.
+      - Removes duplicate reactions (even one side of bidirectional ones).
+      - Checks reaction rate dimensions for consistency.
+      - Checks for valid reaciton types (i.e., flow types must all have the same FLOW rate)
+
+    In-Progress Features (Should Check):
+    -----------------------------------
+      - Initial conditions can be set in the input file.
+      - Support for inline kinetic rate values:
+        Example:
+          A + B -> C, k1=0.1
+          A + B <-> C, kon, koff=100
+
+    Feature to Consider Developing:
+    -----------------------------------
+    - Allow setting rates and initial conditions from text file or external file.
+    - Investigate prior use of "=" operator in reactions.
+    - Improve MATLAB text wrapping for long lines.
+    - Add back support for Python code.
+
+    Problems to Resolve:
+    -----------------------------------
+    - Currently requires there to be some nbs <- Add condition to check if no nbs
+    - Currently doesn't handle the reaction: -> 3*A, kflow, Aup correctly
 
     Current Version:
-    Suzanne Sindi
-    01/13/2024
+        Suzanne Sindi, 03/25/2025
 
     """))
-    sys.exit("Usage: python3 createMatlabFile.py StaticCoag.txt")
+    sys.exit("Usage: python3 createCoagModel.py StaticCoag.txt")
 
 ########################
 # Supporting Functions #
@@ -146,160 +145,129 @@ def parseReactions(reactions):
     parsed_reactions = []
 
     for reaction in reactions:
-        # Split the reaction line by commas
-        parts = [part.strip() for part in reaction.split(',')]
-        
-        # Check if we have at least the equation and one rate constant
-        if len(parts) < 2:
-            print(f"\tError: Invalid format {reaction} (not enough parts)")
-            continue
-
-        # Separate the equation and rate constants
-        equation       = parts[0]
-        rate_constants = parts[1:]
-
         print(f"Processing Reaction: '{reaction}'")
-
-        # Sanity check for number of rate constants based on the reaction direction
-        if '<->' in equation:
-            # For uni-directional reactions, we expect exactly 1 rate constant
-            if(len(rate_constants) == 3):
-                numberBindingSites = rate_constants[2];
-                print(f"\tLipid Reaction: '{reaction}' has 3 rate constants with '{numberBindingSites}'")
-            elif len(rate_constants) != 2:
-                print(f"\tError: Bi-directional reaction '{reaction}' must have exactly 2 rate constants or 3 (lipid) reaction.")
-                continue
-        elif '->' in equation:
-            # For bi-directional reactions, we expect exactly 2 rate constants
-            if len(rate_constants) != 1:
-                print(f"\tError: Uni-directional reaction '{reaction}' must have exactly 1 rate constant.")
-                continue
-        else:
-            print(f"\tError: Invalid reaction format (must include '->' or '<->'): {reaction}")
-            continue
-            
+        
         # Parse the equation
-        result = parseEquation(equation)
+        result = parseEquation(reaction)
         if result is None:
             print(f"\tError: Invalid equation format in reaction: {reaction}")
             continue
 
-        #reactionCount, reactants, reactantCoeffs, products, productCoeffs = result
-        reactionCount, reactants, reactantCoeffs, products, productCoeffs, isLipidBinding = result
-        # Parse the rate constants;
-        names  = []
-        values = []
-        for rateString in rate_constants:
-            # Check if there's an '=' symbol, which indicates a rate constant with a value
-            if '=' in rateString:
-                name, value = rateString.split('=')
-                names.append(name.strip())
-                values.append(float(value.strip()))  # Convert the value to a float
-            else:
-                # If no '=' symbol, it's just a symbolic rate constant (e.g., "kon")
-                names.append(rateString.strip())
-                values.append(-1)  # Unrealistic value so we know this wasn't set to a number
+        (
+            reactionCount,
+            reactants,
+            reactantCoeffs,
+            products,
+            productCoeffs,
+            rates,
+            reaction_type
+        ) = result
+        
+        print(f"\tReaction Count = {reactionCount}")
+        print(f"\tReactants = {reactants})")
+        print(f"\tCoeffs = {reactantCoeffs})")
+        print(f"\tProducts = {products}")
+        print(f"\tProducts Coeffs = {productCoeffs}")
+        print(f"\tRates = {rates}")
+        print(f"\tReaction Type = {reaction_type}")
+        print(f"**********")
 
+        # Extract rate names and values
+        # Note: There might be different rates & values;
+        names = []
+        values = []
+        for rate in rates:
+            if '=' in rate:
+                name, value = rate.split('=')
+                names.append(name.strip())
+                values.append(float(value.strip()))
+            else:
+                names.append(rate.strip())
+                values.append(-1)
+                
+        # Ensure that names and values have at least 3 elements, filling with defaults if needed
+        while len(names) < (reactionCount+1):
+            names.append("")  # Default empty string for missing names
+        while len(values) < (reactionCount+1):
+            values.append(-1)  # Default value of -1 for missing values
+        
         if reactionCount == 1:  # We add only 1 case, easy
             # Create a Reaction object and add to the list
             reaction_obj = Reaction(
-                equation=equation,
+                equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs),
                 rateName=names[0],
                 rateValue=values[0],
                 reactants=reactants,
                 reactant_coeffs=reactantCoeffs,
                 products=products,
                 product_coeffs=productCoeffs,
-                lipidReaction=False,
-                numberBindingSites=""
+                reactionType=reaction_type,
+                rateModifier=names[1],
+                rateModifierValue=values[1]
             )
             parsed_reactions.append(reaction_obj)
         
         elif reactionCount == 2:  # We add 2 objects for bi-directional reactions
-            if(isLipidBinding==True):
-                reaction_fwd = Reaction(
-                    equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs),
-                    rateName=names[0],
-                    rateValue=values[0],
-                    reactants=reactants,
-                    reactant_coeffs=reactantCoeffs,
-                    products=products,
-                    product_coeffs=productCoeffs,
-                    lipidReaction=True,
-                    numberBindingSites = rate_constants[2]
-                )
+            reaction_fwd = Reaction( equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs), rateName=names[0], rateValue=values[0], reactants=reactants, reactant_coeffs=reactantCoeffs, products=products, product_coeffs=productCoeffs, reactionType=reaction_type, rateModifier=names[2], rateModifierValue=values[2] )
             
-                reaction_rev = Reaction(
-                    equation=formatFwdReaction(products, productCoeffs, reactants, reactantCoeffs),
-                    rateName=names[1],
-                    rateValue=values[1],
-                    reactants=products,
-                    reactant_coeffs=productCoeffs,
-                    products=reactants,
-                    product_coeffs=reactantCoeffs,
-                    lipidReaction=True,
-                    numberBindingSites = rate_constants[2]
-                )
-                parsed_reactions.append(reaction_fwd)
-                parsed_reactions.append(reaction_rev)
-            else:
-                reaction_fwd = Reaction(
-                    equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs),
-                    rateName=names[0],
-                    rateValue=values[0],
-                    reactants=reactants,
-                    reactant_coeffs=reactantCoeffs,
-                    products=products,
-                    product_coeffs=productCoeffs,
-                    lipidReaction=False,
-                    numberBindingSites = ""
-                )
-            
-                reaction_rev = Reaction(
-                    equation=formatFwdReaction(products, productCoeffs, reactants, reactantCoeffs),
-                    rateName=names[1],
-                    rateValue=values[1],
-                    reactants=products,
-                    reactant_coeffs=productCoeffs,
-                    products=reactants,
-                    product_coeffs=reactantCoeffs,
-                    lipidReaction=False,
-                    numberBindingSites = ""
-                )
-                parsed_reactions.append(reaction_fwd)
-                parsed_reactions.append(reaction_rev)
+            reaction_rev = Reaction( equation=formatFwdReaction(products, productCoeffs, reactants, reactantCoeffs), rateName=names[1], rateValue=values[1], reactants=products, reactant_coeffs=productCoeffs, products=reactants, product_coeffs=reactantCoeffs, reactionType=reaction_type, rateModifier=names[2], rateModifierValue=values[2] )
+            parsed_reactions.append(reaction_fwd)
+            parsed_reactions.append(reaction_rev)
+        
         else:
-            print(f"\tError: Invalid equation format in reaction: {reaction}")
+            print(f"\tError: Invalid reaction count in: {reaction}")
             continue
-
+    
     return parsed_reactions
 
 
-# Adjusted parseEquation to handle None case
+
 def parseEquation(equation):
+    # Remove comments if present
+    equation = equation.split("#")[0].strip()
+
+    # Split components based on commas
+    parts = [p.strip() for p in equation.split(",")]
+
+    # Ensure there are at least three components (reactants/products + at least one rate)
+    if len(parts) < 2:
+        print(f"Error: Malformed equation - {equation}")
+        return None, None, None, None, None, None
+
+    #Grab the Biochemical Equation
+    equation_part = parts[0]
+
+    # Extract reaction type (if specified) or default to "MASS_ACTION"
+    # and reaction rates (either 1, 2 or 3);
+    known_types = {"LIPID", "PLATELET", "FLOW", "MASS_ACTION"}
+    if parts[-1] in known_types:
+        reaction_type = parts[-1]
+        rates = parts[1:-1]  # capture rates only when reaction type is known
+    else:
+        reaction_type = "MASS_ACTION"
+        rates = parts[1:]  # treat all parts as rates when no reaction type is specified
+
     # Determine if the equation has <-> or ->
-    if '<->' in equation:
+    if '<->' in equation_part:
         reactionCount = 2
-        lhs, rhs = equation.split('<->')
-    elif '->' in equation:
+        lhs, rhs = equation_part.split('<->')
+    elif '->' in equation_part:
         reactionCount = 1
-        lhs, rhs = equation.split('->')
+        lhs, rhs = equation_part.split('->')
     else:
         print(f"Error: Equation must contain '->' or '<->': {equation}")
-        return None, None, None, None, None
+        return None, None, None, None, None, None
 
     # Split LHS and RHS on "+" and ignore white space
-    reactants = [r.strip() for r in lhs.split('+')]
-    products = [p.strip() for p in rhs.split('+')]
+    reactants = [r.strip() for r in lhs.split('+')] if lhs.strip() else []
+    products = [p.strip() for p in rhs.split('+')] if rhs.strip() else []
 
     # Call extract_coefficients to process reactants and products
     reactantCoeffs, reactants = extract_coefficients(reactants)
     productCoeffs, products = extract_coefficients(products)
 
-    # Identify lipid-binding reactions
-    isLipidBinding = any(r in {"L_noTF", "L_TF"} for r in reactants)
-    
-    return reactionCount, reactants, reactantCoeffs, products, productCoeffs, isLipidBinding
+    return reactionCount, reactants, reactantCoeffs, products, productCoeffs, rates, reaction_type
+
 
 # Extract the Coefficients for a Set of Reactants
 def extract_coefficients(terms):
@@ -377,7 +345,7 @@ class InitialCondition:
 class Reaction:
     index_counter = 0  # Class variable to keep track of the index
 
-    def __init__(self, equation, rateName, rateValue, reactants, reactant_coeffs, products, product_coeffs,lipidReaction,numberBindingSites):
+    def __init__(self, equation, rateName, rateValue, reactants, reactant_coeffs, products, product_coeffs,reactionType,rateModifier,rateModifierValue):
         self.equation = equation
         self.rateName  = rateName
         self.rateValue = rateValue
@@ -385,8 +353,9 @@ class Reaction:
         self.reactant_coeffs = reactant_coeffs
         self.products = products
         self.product_coeffs = product_coeffs
-        self.lipidReaction = lipidReaction
-        self.numberBindingSites=numberBindingSites
+        self.reactionType = reactionType
+        self.rateModifier = rateModifier
+        self.rateModifierValue = rateModifierValue
         self.index = Reaction.index_counter  # Assign the current index
         Reaction.index_counter += 1  # Increment the index for the next reaction
 
@@ -394,8 +363,8 @@ class Reaction:
         return (f"Reaction(index={self.index}, equation={self.equation}, rateName={self.rateName}, "
                 f"rateValue={self.rateValue}, reactants={self.reactants}, "
                 f"reactant_coeffs={self.reactant_coeffs}, products={self.products}, "
-                f"product_coeffs={self.product_coeffs}, lipid_rxn={self.lipidReaction}, "
-                f"number_bs = {self.numberBindingSites}")
+                f"product_coeffs={self.product_coeffs}, rxn_type={self.reactionType}, "
+                f"rate_modifier = {self.rateModifier}, rate_modifierValue = {self.rateModifierValue}")
 
     def __eq__(self, other):
         if isinstance(other, Reaction):
@@ -432,8 +401,8 @@ class Stoich:
         for r in parsedReactions:
             self.rates.append(r.rateName)
     
-        self.N = len(self.species)
-        self.M = len(self.rates)
+        self.N = len(self.species)  #Species
+        self.M = len(self.rates)    #Reactions
         
         self.stoich    = [[math.nan for i in range(self.M)] for j in range(self.N)]
         self.reactants = [[math.nan for i in range(self.M)] for j in range(self.N)]
@@ -538,7 +507,7 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     Nr = len(s.rates)
     
     NumReactions = len(parsed_reactions)
-    
+        
     #if Nr==NumReactions:
     #    print(f"Yay!")
     #    exit(-1)
@@ -603,11 +572,13 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     fParam.write("% Binding Site Parameters \n")
     for i in range(len(uniqueNBS)):
         fParam.write(uniqueNBS[i])
+        #fParam.write(str(uniqueNBS[i]))
         fParam.write(" = 1; \n")
         
     fParam.write("\n")
     fParam.write("nbs = [ ")
     fParam.write(uniqueNBS[0])
+    #fParam.write(str(uniqueNBS[0]))
     for i in range(1, len(uniqueNBS)):
         fParam.write(", ")
         fParam.write(uniqueNBS[i])
@@ -715,7 +686,7 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
         f.write(str(i+1))
         f.write(")  =")
         for j in range(Nr):
-            isLipidReaction = parsed_reactions[j].lipidReaction
+            isLipidReaction = (parsed_reactions[j].reactionType=="LIPID")
             
             #If the reaction j reduces the amount of species i;
             if (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) < 0):
@@ -729,7 +700,7 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
                 # L_dt     = +rate*nbs
                 if isLipidReaction and not (isLipidSpecies or isOnEmptyLipid or isOnTFLipid): #V_s
                     f.write("/")
-                    f.write(str(parsed_reactions[j].numberBindingSites))
+                    f.write(parsed_reactions[j].rateModifier)
                 for k in range(Ns):
                     if (not math.isnan(s.reactants[k][j])) and (int(s.reactants[k][j]) <= 0):
                         f.write(" * ")
@@ -744,10 +715,10 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
                 #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
                 if isLipidSpecies: #This must be a koff
                     f.write("*")
-                    f.write(str(parsed_reactions[j].numberBindingSites))
+                    f.write(parsed_reactions[j].rateModifier)
                 if isLipidReaction and ( not isLipidSpecies ) and (isOnEmptyLipid or isOnTFLipid): #V_s
                     f.write("/")
-                    f.write(str(parsed_reactions[j].numberBindingSites))
+                    f.write(parsed_reactions[j].rateModifier)
                 for k in range(Ns):
                     ##Double check that this makes sense; perhaps should be reactants.
                     if (not math.isnan(s.stoich[k][j])) and (int(s.stoich[k][j]) <= 0):
@@ -759,6 +730,7 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
                         if (abs(int(s.reactants[k][j])) != 1) and (s.reactants[k][j] != 0):
                             f.write("^")
                             f.write(str(abs(int(s.reactants[k][j]))))
+            
             #If the reaction j leaves species i untouched.
             elif (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) == 0):
                 f.write("  +  ")
@@ -900,6 +872,8 @@ if verbose:
 # Parse the reactions
 parsed_reactions = parseReactions(biochemicalReactions)
 
+#exit(-1);
+
 ########
 # Error: Check for Duplicates in reaction list
 #######
@@ -930,13 +904,20 @@ species = []
 rates = []
 nbs = []
 
+# Create a dictionary to count the occurrences of each reaction type
+reaction_type_count = {"LIPID": 0, "PLATELET": 0, "MASSACTION": 0, "FLOW": 0}
+
 # Iterate through each reaction
 for reaction in parsed_reactions:
     #All reactions are now (after parsing) unidirectional
     rates.append(reaction.rateName)
+    
+    # Increment the count for the reaction type
+    if reaction.reactionType in reaction_type_count:
+        reaction_type_count[reaction.reactionType] += 1
      
-    if(reaction.lipidReaction):
-        nbs.append(reaction.numberBindingSites)
+    if(reaction.reactionType=="LIPID" or reaction.reactionType=="PLATELET"):
+        nbs.append(reaction.rateModifier)
     # Append Reactants and Products if they are not empty
     if reaction.reactants:
         species.extend(reaction.reactants)
@@ -946,6 +927,16 @@ for reaction in parsed_reactions:
 # Get unique entries
 #unique_species = unique_entries_only(species)
 #unique_rates   = unique_entries_only(rates)
+
+# Output the counts of each reaction type in a table format
+print(f"-----------")
+print(f"{'Reaction Type':<15} {'Count'}")
+print(f"-----------")
+
+for reaction_type, count in reaction_type_count.items():
+    print(f"{reaction_type:<15} {count:>5} reactions")
+
+print(f"-----------")
 
 unique_species = unique_entries_in_order(species)
 unique_rates   = unique_entries_in_order(rates)

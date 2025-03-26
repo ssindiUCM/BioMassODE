@@ -1,0 +1,8 @@
+L_TF + V <-> V_s, kon1, koff1, nbs_v, LIPID
+L_TF + X <-> X_s, kon2, koff2, nbs_x, LIPID
+2*X + P10Avail <-> 2*X_b, kon3, koff3, np_x, PLATELET 
+V_s + X_s <-> X_s:V_s, kon4, koff4 #Regular
+A + B -> 2*C, k1 #Regular
+C -> , kflow, FLOW
+-> 3*A, kflow, AUp, FLOW
+
