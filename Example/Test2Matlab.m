@@ -1,4 +1,4 @@
-function [time,y] = Test2Matlab(t_start,t_final)
+function [time,y] = Example/Test2Matlab(t_start,t_final)
 % Solves a system of ODEs from t=t_start to t=t_final 
 % If no start time is given, then t_start = 0 
 % If no start or final time is given, then t_start = 0, t_final = 30*60 
@@ -18,10 +18,10 @@ end
 
 
 % Set the Kinetic Parameters
-Test2Params
+Example/Test2Params
 
 % Set the Initial Conditions
-Test2IC
+Example/Test2IC
 
 options = odeset('RelTol',1e-12,'AbsTol',1e-23);
 
@@ -32,12 +32,12 @@ options = odeset('RelTol',1e-12,'AbsTol',1e-23);
 
 
 % Rename solution components
-Test2Rename
+Example/Test2Rename
 %  
 % Place plots or other calculations here
 %   
 % Example: 
-plot(time, L_TF, 'k-o', 'LineWidth', 4, 'MarkerSize', 4); legend('L_TF');
+% plot(time, L_TF, 'k-o', 'LineWidth', 4, 'MarkerSize', 4); legend('L_TF');
 
 
 end
@@ -81,7 +81,7 @@ nbs_v = nbs(1);
 nbs_x = nbs(2);  
 
 
-% ODEs from reaction M
+% ODEs from reaction equations 
 
 % L_TF
  dy(1)  =  -  kon1 * L_TF * V  +  koff1*nbs_v * V_s  -  kon2 * L_TF * X  +  koff2*nbs_x * X_s;
@@ -108,7 +108,7 @@ nbs_x = nbs(2);
  dy(8)  =  -  k1 * A * B;
 
 % C
- dy(9)  =  +  k1 * A * B;
+ dy(9)  =  +  k1 * 2 * A * 2 * B;
 
 
 

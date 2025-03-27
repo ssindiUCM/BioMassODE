@@ -1,4 +1,3 @@
-,kon,koff,kflow
-L_TF,,1,
-A,,1,3
-A_st,1,,
+,kflow,k1
+A,3,1
+B,,

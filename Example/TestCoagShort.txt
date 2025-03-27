@@ -1,2 +1,3 @@
-L_TF + A <-> A_st, kon, koff, nbs_a, LIPID
+#L_TF + A <-> A_st, kon, koff, nbs_a, LIPID
 -> 3*A, kflow, AUp, FLOW
+A + 2*B -> A, k1

@@ -2,14 +2,14 @@
 A = 10.0 #\mu M
 B = 1.0  #\mu M
 
-PTotal = P1 + P2 
-
 # Example biochemicalReactions array for debugging
  -> A, k_0
 B ->, d
+K -> H + H, r
+2*N -> L + N, p1
 A + 2 * B -> C , k_1
 A + B -> A + C, k_6=0.2
-A + 2 * B <-> D , k_1=1 , k_2=10
+A + 3 * B <-> D , k_1=1 , k_2=10
 D + E -> F , k_3
 X + Y , k_4  # Invalid: missing direction
 Z <-> W , k_5 # Invalid: missing third rate

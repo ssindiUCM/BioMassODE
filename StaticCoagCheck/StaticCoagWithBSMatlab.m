@@ -1,11 +1,11 @@
-function [time,y] = StaticCoag/StaticCoagWithBSMatlab(t_start,t_final)
+function [time,y] = StaticCoagCheck/StaticCoagWithBSMatlab(t_start,t_final)
 % Solves a system of ODEs from t=t_start to t=t_final 
 % If no start time is given, then t_start = 0 
 % If no start or final time is given, then t_start = 0, t_final = 30*60 
 %
 %
 % This file was created by issuing command: 
-%     python createMatlabFile.py StaticCoag/StaticCoagWithBS.txt
+%     python createMatlabFile.py StaticCoagCheck/StaticCoagWithBS.txt
 %
 
 if nargin == 0
@@ -18,10 +18,10 @@ end
 
 
 % Set the Kinetic Parameters
-StaticCoag/StaticCoagWithBSParams
+StaticCoagCheck/StaticCoagWithBSParams
 
 % Set the Initial Conditions
-StaticCoag/StaticCoagWithBSIC
+StaticCoagCheck/StaticCoagWithBSIC
 
 options = odeset('RelTol',1e-12,'AbsTol',1e-23);
 
@@ -32,7 +32,7 @@ options = odeset('RelTol',1e-12,'AbsTol',1e-23);
 
 
 % Rename solution components
-StaticCoag/StaticCoagWithBSRename
+StaticCoagCheck/StaticCoagWithBSRename
 %  
 % Place plots or other calculations here
 %   
@@ -804,7 +804,7 @@ nbs_PS = nbs(12);
  dy(124)  =  -  kon_sn_xiia * SN * XIIa  +  koff_sn_xiia * XIIa_sn  -  ka_xiia_pk * XIIa * PK  +  kd_xiiapk * XIIabPK  +  kc_xiiapk * XIIabPK  +  kc_pkaxii * PKabXII  -  ka_xiia_xi * XI * XIIa  +  kd_xiiaxi * XIIabXI  +  kc_xiiaxi * XIIabXI  -  ka_xiia_at * AT * XIIa  -  ka_xiia_c1inh * XIIa * C1INH;
 
 % XIIa_sn
- dy(125)  =  +  kon_sn_xiia * SN * XIIa  -  koff_sn_xiia * XIIa_sn  -  ka_sn_xiia_xii * XII_sn * XIIa_sn  +  kd_sn_xiiaxii * XIIa_snbXII_sn  +  kc_sn_xiiaxii * 2 * XIIa_snbXII_sn  +  kc_sn_xii * XII_sn  -  ka_sn_xiia_at * AT * XIIa_sn  -  ka_sn_xiia_c1inh * XIIa_sn * C1INH  -  ka_sn_xihk_xiia * XIIa_sn * XIbHK_sn  +  kd_sn_xihkxiia * XIbHK_snbXIIa_sn  +  kc_sn_xihkxiia * XIbHK_snbXIIa_sn  -  ka_sn_pkhk_xiia * XIIa_sn * PKbHK_sn  +  kd_sn_pkhkxiia * PKbHK_snbXIIa_sn  +  kc_sn_pkhkxiia * PKbHK_snbXIIa_sn  +  kc_sn_pkahkxii * PKabHK_snbXII_sn;
+ dy(125)  =  +  kon_sn_xiia * SN * XIIa  -  koff_sn_xiia * XIIa_sn  -  ka_sn_xiia_xii * XII_sn * XIIa_sn  +  kd_sn_xiiaxii * XIIa_snbXII_sn  +  2 * kc_sn_xiiaxii * XIIa_snbXII_sn  +  kc_sn_xii * XII_sn  -  ka_sn_xiia_at * AT * XIIa_sn  -  ka_sn_xiia_c1inh * XIIa_sn * C1INH  -  ka_sn_xihk_xiia * XIIa_sn * XIbHK_sn  +  kd_sn_xihkxiia * XIbHK_snbXIIa_sn  +  kc_sn_xihkxiia * XIbHK_snbXIIa_sn  -  ka_sn_pkhk_xiia * XIIa_sn * PKbHK_sn  +  kd_sn_pkhkxiia * PKbHK_snbXIIa_sn  +  kc_sn_pkhkxiia * PKbHK_snbXIIa_sn  +  kc_sn_pkahkxii * PKabHK_snbXII_sn;
 
 % XIIa_snbXII_sn
  dy(126)  =  +  ka_sn_xiia_xii * XII_sn * XIIa_sn  -  kd_sn_xiiaxii * XIIa_snbXII_sn  -  kc_sn_xiiaxii * XIIa_snbXII_sn;

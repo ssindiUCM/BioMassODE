@@ -58,13 +58,14 @@ if len(sys.argv) < 2:
     Supported Features:
     -----------------------------------
       - Support for non-mass action lipid/platlet binding.
+      - Outputs lipid/platlet binding sites as a separate parameter vector (nbs)
+      - Can handle only mass action terms.
       - Outputs Species and rates output in input order.
       - Supports pure synthesis/degradation (e.g., "-> A", "B ->").
       - Consolidates duplicate kinetic rates.
       - Splits stoichiometric matrix for A + B -> A + C reactions.
       - Removes duplicate reactions (even one side of bidirectional ones).
       - Checks reaction rate dimensions for consistency.
-      - Checks for valid reaciton types (i.e., flow types must all have the same FLOW rate)
 
     In-Progress Features (Should Check):
     -----------------------------------
@@ -83,7 +84,7 @@ if len(sys.argv) < 2:
 
     Problems to Resolve:
     -----------------------------------
-    - Currently requires there to be some nbs <- Add condition to check if no nbs
+    - Check for valid reaction types (i.e., flow types must all have the same FLOW rate)
     - Currently doesn't handle the reaction: -> 3*A, kflow, Aup correctly
 
     Current Version:
@@ -149,10 +150,12 @@ def parseReactions(reactions):
         
         # Parse the equation
         result = parseEquation(reaction)
-        if result is None:
+        
+        # Ensure result is valid before unpacking
+        if not result or all(val is None for val in result):
             print(f"\tError: Invalid equation format in reaction: {reaction}")
-            continue
-
+            continue  # Skip this reaction
+            
         (
             reactionCount,
             reactants,
@@ -232,7 +235,7 @@ def parseEquation(equation):
     # Ensure there are at least three components (reactants/products + at least one rate)
     if len(parts) < 2:
         print(f"Error: Malformed equation - {equation}")
-        return None, None, None, None, None, None
+        return None, None, None, None, None, None, None
 
     #Grab the Biochemical Equation
     equation_part = parts[0]
@@ -247,16 +250,23 @@ def parseEquation(equation):
         reaction_type = "MASS_ACTION"
         rates = parts[1:]  # treat all parts as rates when no reaction type is specified
 
-    # Determine if the equation has <-> or ->
+    # Determine reaction direction and count
     if '<->' in equation_part:
         reactionCount = 2
         lhs, rhs = equation_part.split('<->')
+        expected_rate_count = 2 if reaction_type == "MASS_ACTION" else 3
     elif '->' in equation_part:
         reactionCount = 1
         lhs, rhs = equation_part.split('->')
+        expected_rate_count = 1 if reaction_type == "MASS_ACTION" else 2
     else:
         print(f"Error: Equation must contain '->' or '<->': {equation}")
-        return None, None, None, None, None, None
+        return None, None, None, None, None, None, None
+        
+    # Validate rate count
+    if len(rates) != expected_rate_count:
+        print(f"Error: Expected {expected_rate_count} rates for {reaction_type} reaction '{equation_part}', but got {len(rates)}.")
+        return None, None, None, None, None, None, None
 
     # Split LHS and RHS on "+" and ignore white space
     reactants = [r.strip() for r in lhs.split('+')] if lhs.strip() else []
@@ -267,7 +277,6 @@ def parseEquation(equation):
     productCoeffs, products = extract_coefficients(products)
 
     return reactionCount, reactants, reactantCoeffs, products, productCoeffs, rates, reaction_type
-
 
 # Extract the Coefficients for a Set of Reactants
 def extract_coefficients(terms):
@@ -569,20 +578,21 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
         fParam.write(uniqueRates[i])
     fParam.write(" ];\n\n\n")
     
-    fParam.write("% Binding Site Parameters \n")
-    for i in range(len(uniqueNBS)):
-        fParam.write(uniqueNBS[i])
-        #fParam.write(str(uniqueNBS[i]))
-        fParam.write(" = 1; \n")
+    if len(uniqueNBS) >=1:
+        fParam.write("% Binding Site Parameters \n")
+        for i in range(len(uniqueNBS)):
+            fParam.write(uniqueNBS[i])
+            #fParam.write(str(uniqueNBS[i]))
+            fParam.write(" = 1; \n")
         
-    fParam.write("\n")
-    fParam.write("nbs = [ ")
-    fParam.write(uniqueNBS[0])
-    #fParam.write(str(uniqueNBS[0]))
-    for i in range(1, len(uniqueNBS)):
-        fParam.write(", ")
-        fParam.write(uniqueNBS[i])
-    fParam.write(" ];\n\n\n")
+        fParam.write("\n")
+        fParam.write("nbs = [ ")
+        fParam.write(uniqueNBS[0])
+        #fParam.write(str(uniqueNBS[0]))
+        for i in range(1, len(uniqueNBS)):
+            fParam.write(", ")
+            fParam.write(uniqueNBS[i])
+        fParam.write(" ];\n\n\n")
 
     f.write("% Set the Kinetic Parameters\n")
     f.write(f"{ParamPrefix}\n\n")
@@ -609,7 +619,10 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     f.write("options = odeset('RelTol',1e-12,'AbsTol',1e-23);\n\n\n")
 
     f.write("%------------------------- Main Solve ----------------------%\n")
-    f.write("[time,y] = ode15s(@(t,y)RHS(t,y,p,nbs), t_start:1:t_final, init_cond, options);\n")
+    if len(uniqueNBS) >=1:
+        f.write("[time,y] = ode15s(@(t,y)RHS(t,y,p,nbs), t_start:1:t_final, init_cond, options);\n")
+    else:
+        f.write("[time,y] = ode15s(@(t,y)RHS(t,y,p), t_start:1:t_final, init_cond, options);\n")
     f.write("%-----------------------------------------------------------%\n\n\n")
 
     fRename.write("% Rename solution components\n") ##Modify
@@ -638,8 +651,12 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     f.write("%-------------------- RHS Function -------------------%\n")
     f.write("%-----------------------------------------------------%\n\n")
 
+    if len(uniqueNBS) >=1:
+        f.write("function dy = RHS(t,y,p,nbs)\n\n")
+    else:
+        f.write("function dy = RHS(t,y,p)\n\n")
 
-    f.write("function dy = RHS(t,y,p,nbs)\n\n")
+    
     f.write("dy = zeros(")
     f.write(str(Ns))
     f.write(",1);\n")
@@ -662,19 +679,20 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
         f.write(");  \n")
     f.write("\n\n")
 
-    f.write("% Rename Binding Site \n")
-    for i in range(len(uniqueNBS)):
-        f.write(str(uniqueNBS[i]))
-        f.write(" = nbs(")
-        f.write(str(i+1))
-        f.write(");  \n")
-    f.write("\n\n")
+    if len(uniqueNBS) >=1:
+        f.write("% Rename Binding Site \n")
+        for i in range(len(uniqueNBS)):
+            f.write(str(uniqueNBS[i]))
+            f.write(" = nbs(")
+            f.write(str(i+1))
+            f.write(");  \n")
+        f.write("\n\n")
 
     f.write("% ODEs from reaction equations \n\n")
 
     if v: print("Writing ODEs now....\n")
 
-    for i in range(Ns):
+    for i in range(Ns): #For each Species
         speciesName = species[i]
         isLipidSpecies = "L_noTF" in speciesName or "L_TF" in speciesName
         isOnEmptyLipid = "_s" in speciesName and (not "_st" in speciesName) and (not "_sn" in speciesName)
@@ -685,13 +703,25 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
         f.write("\n dy(")
         f.write(str(i+1))
         f.write(")  =")
-        for j in range(Nr):
+        for j in range(Nr): #For Each Reaction Reaction
             isLipidReaction = (parsed_reactions[j].reactionType=="LIPID")
-            
-            #If the reaction j reduces the amount of species i;
+            isFlowReaction  = (parsed_reactions[j].reactionType=="FLOW")
+            #################
+            # Case 1: Reaction j DECREASES the amount of species i;
+            #################
             if (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) < 0):
+                ##################
+                #Part 1: Sign, Rate Constant & Stochiometric Change
+                ##################
                 f.write("  -  ")
+                if abs(int(s.stoich[i][j]))>1:
+                    f.write(str(abs(int(s.stoich[i][j])))) #Species i change;
+                    f.write(" * ")
                 f.write(str(rates[j])) #Reaction Rate
+                
+                ##################
+                #Part 2: Modifying the Reaction Rate if Needed for Each Type
+                ##################
                 #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
                 #if isLipidReaction: #This must be a koff
                 # V_s -> V + L; L is correct
@@ -701,17 +731,34 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
                 if isLipidReaction and not (isLipidSpecies or isOnEmptyLipid or isOnTFLipid): #V_s
                     f.write("/")
                     f.write(parsed_reactions[j].rateModifier)
-                for k in range(Ns):
+                                        
+                ##################
+                #Part 3: Calculate the forward rate from reactant concentration
+                ##################
+                for k in range(Ns): #Species k
                     if (not math.isnan(s.reactants[k][j])) and (int(s.reactants[k][j]) <= 0):
                         f.write(" * ")
                         f.write(transform_string(species[k]))
                         if (abs(int(s.reactants[k][j])) != 1) and (s.reactants[k][j] != 0):
                             f.write("^")
                             f.write(str(abs(int(s.reactants[k][j]))))
-            #If the reaction j increases the amount of species i
+
+            #################
+            # Case 2: Reaction j INCREASES the amount of species i;
+            #################
             elif (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) > 0):
+                ##################
+                #Part 1: Sign, Rate Constant & Stochiometric Change
+                ##################
                 f.write("  +  ")
-                f.write(str(rates[j])) #Reaction Rate
+                if abs(int(s.stoich[i][j]))>1:
+                    f.write(str(abs(int(s.stoich[i][j])))) #Species i change;
+                    f.write(" * ")
+                f.write(str(rates[j])) #Biochemical Reaction Rate
+                
+                ##################
+                #Part 2: Modifying the Reaction Rate if Needed for Each Type
+                ##################
                 #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
                 if isLipidSpecies: #This must be a koff
                     f.write("*")
@@ -719,25 +766,32 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
                 if isLipidReaction and ( not isLipidSpecies ) and (isOnEmptyLipid or isOnTFLipid): #V_s
                     f.write("/")
                     f.write(parsed_reactions[j].rateModifier)
+                    
+                if isFlowReaction:
+                    f.write(" * ")
+                    f.write(parsed_reactions[j].rateModifier)
+
+                ##################
+                #Part 3: Calculate the forward rate from reactant concentration
+                ##################
                 for k in range(Ns):
                     ##Double check that this makes sense; perhaps should be reactants.
-                    if (not math.isnan(s.stoich[k][j])) and (int(s.stoich[k][j]) <= 0):
+                    if (not math.isnan(s.reactants[k][j])) and (int(s.reactants[k][j]) <= 0):
                         f.write(" * ")
-                        if (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) > 1):
-                            f.write(str(int(s.stoich[i][j])))
-                            f.write(" * ")
                         f.write(transform_string(species[k]))
                         if (abs(int(s.reactants[k][j])) != 1) and (s.reactants[k][j] != 0):
                             f.write("^")
                             f.write(str(abs(int(s.reactants[k][j]))))
             
-            #If the reaction j leaves species i untouched.
+            #################
+            # Case 3: Reaction j DEPENDS on Species i; but doesn't change it's concentration
+            #################
             elif (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) == 0):
                 f.write("  +  ")
                 f.write(" 0 ")
+                
         if v: print(species[i]," complete")
         f.write(";\n\n")
-
 
     f.write("\n\n\n\n")
     f.write("end")
