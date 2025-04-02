@@ -1,6 +1,34 @@
 #Example Initial Conditions
-A = 10.0 #\mu M
-B = 1.0  #\mu M
+A_IC = 10.0 #\muM
+B_IC = 5.0;  #µM
+C_IC = 0;
+D_IC = -1;  #Invalid, should be non-negative
+E_IC = abc;  #Invalid, not a number
+A_IC = 20.9
+P_SUB_IC = 10.0 #\mu M - the IC of the P_SUB
+
+#Parameters
+A_up  = A_IC #\mu M; Let's see if this works!
+C_up  = C_IC
+Vp    = 10.00 #\mu M; totally made up number!
+e2P   = 0.001 #\mu M; the threshold amount of e2
+nbs_v = 5
+
+#Function; needs to begin with
+FUNCTION A(x,e2P) = x/(e2P + x) #1 nM = 0.001 \mu M
+FUNCTION Dilute(Vp,PL_S,PL_V) = (Vp)/(1 - Vp*(PL_S + PL_V))*(D[PL_S] + D[PL_V])
+
+#Lipid Species
+L_TF = LIPID
+L_noTF = LIPID
+
+#Platelet Species
+PL   = PLATELET #Platlet in Solution
+PL_S = PLATELET #Platelet in Subendothelium
+PL_V = PLATELET #Platelet in Volume
+
+#Platelet Sites
+P10Avail = PLATELET_SITES
 
 # Example biochemicalReactions array for debugging
  -> A, k_0
@@ -14,3 +42,36 @@ D + E -> F , k_3
 X + Y , k_4  # Invalid: missing direction
 Z <-> W , k_5 # Invalid: missing third rate
 A -> F, k_1
+X_b -> II + X_b, kcat #We have thrombin in the rxn zone.
+V_s + X_s <-> X_s:V_s, kon4, koff4 #Regular
+A + B -> 2*C, k1    #Regular
+
+#Binding to a Lipid or Platelet
+L_TF + V <-> V_s, kon1, koff1, nbs_v, LIPID
+L_TF + X  <-> X_s, kon2, koff2, nbs_x, LIPID
+X + P10Avail <-> X_b, kon3, koff3, np_x, PLATELET
+
+#Flow Reactions
+C ->, kflow, Cup, FLOW
+-> C, kflow, Cup, FLOW
+-> A, kflow, Aup, FLOW
+A ->, kflow, Aup, FLOW
+
+#Platelet Mass Action Biochemical Equations
+P_SUB + PL -> PL_S, k_pla_plus
+P_SUB + PL_V -> PL_S, k_pla_plus
+PL_S -> PL_V + P_SUB, k_pla_minus
+PL_S + PL -> PL_S + PL_V, k_pla_act
+PL_V + PL -> 2*PL_V, k_pla_act
+
+PL -> PL_V, kact_e2, A(IIa,e2P), FUNCTION
+PL + P_SUB -> PL_S, kact_e2Big, A(IIa,e2P), FUNCTION
+
+#Dilution
+# All species in solution and on surface.
+# All Platelet Species Dilute
+
+#Platelet Flow
+PL -> , kflow, PLup, FLOW #Platelets flow in
+-> PL, kflow, PLup, FLOW  #Platlets flow out
+
