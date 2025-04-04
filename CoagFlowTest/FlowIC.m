@@ -14,10 +14,10 @@ init_cond = [ IIa_IC, V_IC, PL_IC, P_SUB_IC, PL_S_IC, p5avail_IC, p2avail_IC, PL
 
 
 % Flow Rate Parameters 
-IIa_up = 1;
-V_up = 1;
-PL_up = 1; 
+IIa_up = IIa_IC; 
+V_up = V_IC; 
+PL_up = 1.0; 
 
-flow = [ IIa_up, V_up, PL_up ];
+flowUp = [ IIa_up, V_up, PL_up ];
 
 

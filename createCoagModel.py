@@ -30,15 +30,54 @@ if len(sys.argv) < 2:
     -*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*-
     
     Input File Specifications:
-    -----------------------------------
-    - Assumes  biochemical reactions (one per line) of the form:
-            LHS <-> RHS, Rates, TYPE
+    ----------------------------
+    There are 3 classes of objects that can be specified:
+    (1) [OPTIONAL] Variable Specifications: Initial Conditions, Parameter Values, Special Species
+    (2) [OPTIONAL] Functions (to be used later for dilution/non-mass action biochemical kinetics)
+    (3) [REQUIRED] Biochemical Reactions
+    
+    ----------------------------
+    (1) Variable Specification:
+    ----------------------------
+    
     - Comments/Whitespace: Anything following "#" is ignored; Whitespace is ignored.
-    - Supports forward and reversible reactions.
-    - Reaction Operators allowed: '*', '+', '<->', '->'
     - Species names may contain: [0-9a-zA-Z_:]
     - Species names must start with a letter (no leading numbers).
 
+    - Users can define:
+        * Initial Conditions (must be a non-negative real number; DEFAULT = 0)
+            Ex:
+                IIa_IC  = 5.0;  #mu M
+                V_IC    = 0;
+        * Parameter Values (real valued or as previous initial condition; DEFAULT = 1)
+            Ex:
+                IIa_up  = IIa_IC #mu M; Let's see if this works!
+                V_up    = V_IC
+                PL_up   = 1.0    #Set to be a random value.
+        * Special classes of species: LIPID, PLATELET, PLATELET_SITES
+            Ex:
+                PL      = PLATELET  #Platlet in Solution
+                PL_S    = PLATELET  #Platelet in Subendothelium
+                PL_V    = PLATELET  #Platelet in Volume
+                p2avail = PLATELET_SITES
+                p5avail = PLATELET_SITES
+                
+    ---------------
+    (2) Functions:  NOT FULLY SUPPORTED
+    ---------------
+    - Functions are defined as a name, list of arguments (comma separated) and body:
+    - Examples:
+        FUNCTION A(x,e2P) = x/(e2P + x) #1 nM = 0.001 mu M
+    - Function arguments can be a parameter, species name, etc
+
+    ----------------------------
+    (3) Biochemical Equations:
+    ----------------------------
+    
+    - Assumes biochemical reactions (one per line) of the form:
+            LHS <-> RHS, Rates, TYPE
+    - Supports forward and reversible reactions.
+    - Reaction Operators allowed: '*', '+', '<->', '->'
     - 5 Reaction Types:
         * MASS_ACTION: Default (if no type given)
         * FLOW:        species entering or exiting reaction zone.
@@ -146,7 +185,7 @@ def formatFwdReaction(reactants, reactant_coeffs, products, product_coeffs):
 
     return final_string
 
-def parseReactions(reactions, verbose):
+def parseReactions(reactions, plateletSites, verbose):
 
     if verbose:
         print(f"Step 2: Parsing the Biochemical Reacitons")
@@ -165,7 +204,7 @@ def parseReactions(reactions, verbose):
         if verbose: print(f"Processing Reaction: '{reaction}'")
         
         # Parse the equation
-        result = parseEquation(reaction)
+        result = parseEquation(reaction,plateletSites)
         
         # Ensure result is valid before unpacking
         if not result or all(val is None for val in result):
@@ -240,8 +279,7 @@ def parseReactions(reactions, verbose):
     return parsed_reactions
 
 
-
-def parseEquation(equation):
+def parseEquation(equation, plateletSites):
     # Remove comments if present
     equation = equation.split("#")[0].strip()
 
@@ -278,6 +316,9 @@ def parseEquation(equation):
             #    print(f"\tRate Part: {ratePart}")
             #    print(f"\tRate Modifier: {rateModifier}")
                     
+    elif parts[-1] == "PLATELET_ACTIVATION":
+        reaction_type = "PLATELET_ACTIVATION"
+        rates = parts[1:-1]
     else:
         reaction_type = "MASS_ACTION"
         rates = parts[1:]  # treat all parts as rates when no reaction type is specified
@@ -290,7 +331,7 @@ def parseEquation(equation):
     elif '->' in equation_part:
         reactionCount = 1
         lhs, rhs = equation_part.split('->')
-        expected_rate_count = 1 if reaction_type == "MASS_ACTION" else 2
+        expected_rate_count = 1 if (reaction_type == "MASS_ACTION" or reaction_type == "PLATELET_ACTIVATION") else 2
     else:
         print(f"Error: Equation must contain '->' or '<->': {equation}")
         return None, None, None, None, None, None, None
@@ -305,13 +346,95 @@ def parseEquation(equation):
     products = [p.strip() for p in rhs.split('+')] if rhs.strip() else []
 
     # Call extract_coefficients to process reactants and products
-    reactantCoeffs, reactants = extract_coefficients(reactants)
-    productCoeffs, products = extract_coefficients(products)
+    reactantCoeffs, reactants, plateletSiteReactants, plateletSiteReactantCoeffs = extract_coefficients(reactants,plateletSites)
+    productCoeffs, products, plateletSiteProducts, plateletSiteProductCoeffs   = extract_coefficients(products,plateletSites)
+    
+    #Is there anything suspicious: Well we should create plateletSites!
+    if (len(plateletSiteProducts) == 0) and (reaction_type == "PLATELET_ACTIVATION"):
+        print(f"Warning: Did not create plateletSpecies in a {reaction_type} equation: {equation_part}")
+    if (len(plateletSiteReactants) > 0) and (reaction_type == "PLATELET_ACTIVATION"):
+        print(f"Error: We should only have plateletSites in a {reaction_type} equation: {equation_part}")
+        exit(-1);
+    
+    
+    print(f"CHECKING Reaction: {equation}")
+    print(f"reactantCoeffs: {reactantCoeffs}")
+    print(f"reactants: {reactants}")
+    print(f"plateletSiteReactants: {plateletSiteReactants}")
+    print(f"plateletSiteReactantCoeffs: {plateletSiteReactantCoeffs}")
+    print(f"productCoeffs: {productCoeffs}")
+    print(f"products: {products}")
+    print(f"plateletSiteProducts: {plateletSiteProducts}")
+    print(f"plateletSiteProductCoeffs: {plateletSiteProductCoeffs}")
+    print(f"**************")
+
+    #if reaction_type == "PLATELET_ACTIVATION":
+        #exit(-1)
 
     return reactionCount, reactants, reactantCoeffs, products, productCoeffs, rates, reaction_type
 
 # Extract the Coefficients for a Set of Reactants
-def extract_coefficients(terms):
+# Added: plateletSiteBool to check if there's plateletSites in the equation!
+# This should only happen with type PLATELET_ACTIVATION
+def extract_coefficients(terms, plateletSites):
+    plateletSitesFound = []  # Stores species found in plateletSites
+    plateletSiteCoeffs = []  # Stores corresponding coefficients
+
+    # Check if the input contains only an empty string
+    if len(terms) == 1 and terms[0] == '':
+        return [], [], plateletSitesFound, plateletSiteCoeffs
+
+    coeffs = []
+    species = []
+
+    for term in terms:
+        term = term.strip()
+        found_platelet_species = None
+        platelet_coeff = "1"  # Default coefficient is 1
+
+        # If the term contains multiplication, split it
+        if '*' in term:
+            parts = term.split('*')
+            for part in parts:
+                stripped_part = part.strip()
+                if stripped_part in plateletSites:
+                    found_platelet_species = stripped_part
+                else:
+                    platelet_coeff = stripped_part  # Assume other part is the coefficient
+
+        if found_platelet_species:
+            # Store platelet site separately
+            coeffs.append(1)  # Assign standard coefficient 1
+            species.append(found_platelet_species)
+            plateletSitesFound.append(found_platelet_species)
+            plateletSiteCoeffs.append(platelet_coeff)  # Store the extracted coefficient
+        else:
+            # Match terms with coefficients followed by '*'
+            match = re.match(r'(\d*)\s*\*\s*(\S+)', term)
+            if match:
+                coeff_str, species_name = match.groups()
+                coeff = int(coeff_str) if coeff_str else 1
+            else:
+                # Match terms with optional coefficients without '*'
+                match = re.match(r'(\d*)\s*(\S+)', term)
+                if match:
+                    coeff_str, species_name = match.groups()
+                    coeff = int(coeff_str) if coeff_str else 1
+                else:
+                    # Handle unexpected formats
+                    print(f"Error: Invalid term format: {term}")
+                    coeffs.append(1)
+                    species.append(term.strip())
+                    continue
+            
+            coeffs.append(coeff)
+            species.append(species_name.strip())
+
+    return coeffs, species, plateletSitesFound, plateletSiteCoeffs
+
+#Deprecated version ONLY if we had NO PlateletActivation
+def extract_coefficientsOLD(terms):
+        
     # Check if the input contains only an empty string
     if len(terms) == 1 and terms[0] == '':
         return [], []
@@ -762,36 +885,37 @@ def parseParameters(parameterLines, verbose=False):
     if verbose:
         print(f"DONE: 1(f): Parse Specified Parameters")
         print(f"{'-' * 50}")
+        
+        # Define headers for the parameters table
+        p_headers = ["Parameter Name", "Value", "Type"]
     
-        # Define headers for the initial conditions table
-        p_headers = ["Parameter Name", "Value"]
-    
-        # Create a data list for parsed initial conditions
-        p_data = [(p.name, p.value) for p in parsed_params]
+        # Create a data list for parsed parameters, including type
+        p_data = [(p.name, p.value, "Float" if isinstance(p.value, float) else "String") for p in parsed_params]
 
-        # Print table header for initial conditions
-        print(f"\n{'=' * 50}")
-        print(f"{'Step 1(f): Parse Specified Parameters':^30}")
-        print(f"{'=' * 50}")
-        print(f"{p_headers[0]:<30} | {p_headers[1]:>10}")
-        print("-" * 50)
+        # Print table header
+        print(f"\n{'=' * 65}")
+        print(f"{'Step 1(f): Parse Specified Parameters':^50}")
+        print(f"{'=' * 65}")
+        print(f"{p_headers[0]:<30} | {p_headers[1]:>10} | {p_headers[2]:>10}")
+        print("-" * 65)
 
-        # Print each parsed initial condition in the data list
-        for name, value in p_data:
+        # Print each parsed parameter
+        for name, value, value_type in p_data:
             if isinstance(value, float):  # Format floats to 2 decimal places
-                print(f"{name:<30} | {value:>10.2f}")
+                print(f"{name:<30} | {value:>10.2f} | {value_type:>10}")
             else:  # Print strings without decimal formatting
-                print(f"{name:<30} | {value:>10}")
-            
+                print(f"{name:<30} | {value:>10} | {value_type:>10}")
+        
         # Print done message and finish with a line
-        print(f"{'=' * 50}\n")
-
+        print(f"{'=' * 65}\n")
+        
     return parsed_params
 
 def validate_parameters(parsedParameters, uniqueSpecies, verbose = False):
     numErrors = 0
     if verbose:
         print(f"(Q): Do all parameters defined as a string occur as species_IC?")
+        
     for param in parsedParameters:
         if isinstance(param.value, str):  # Check if value is a string
             match = re.fullmatch(r"([A-Za-z0-9_]+)_IC", param.value)
@@ -862,7 +986,7 @@ def createBiochemicalMatrices(unique_species, parsed_reactions, flowRate, prefix
 
 class InitialCondition:
     def __init__(self, name, value):
-        self.name = name
+        self.name  = name
         self.value = value
 
     def __repr__(self):
@@ -870,7 +994,7 @@ class InitialCondition:
 
 class Parameter:
     def __init__(self, name, value):
-        self.name = name
+        self.name  = name
         self.value = value
     
     def __repr__(self):
@@ -1037,7 +1161,7 @@ class Stoich:
 
 #def create_matlab_multipleFileOutput(input_file: str, parsed_reactions: list, outputPrefix: str, s: Stoich, species: list, rates: list, uniqueRates: list, uniqueNBS: list, v: bool = False):
 
-def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoich, parsed_reactions: list, species: list, rates: list, uniqueRates: list, uniqueNBS: list, uniqueFlow: list, parsed_ICs: list, parsed_params: list, verbose: bool = False):
+def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoich, parsed_reactions: list, species: list, rates: list, uniqueRates: list, uniqueNBS: list, uniqueFlow: list, parsed_ICs: list, parsed_params: list, parsedPlateletSpecies: list, verbose: bool = False):
     
     if verbose:
         print('-' * 50)
@@ -1047,7 +1171,10 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     Nr = len(s.rates)
     
     NumReactions = len(parsed_reactions)
-        
+    if( not NumReactions == Nr):
+        print(f"Error in Creating Matlab File: Total Rates do not Match Reactions.\n")
+        exit(-1);
+
     #species = [i.name for i in s.species.keys()]
     #rates = [i for i in s.rates.keys()]
     #if v: print('\nOutput File: \n', output_file)
@@ -1125,7 +1252,8 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     # Set Initial Conditions and Upstream Flow Values: Default value of 0 if not specified #
     ########################################################################################
     
-    ic_dict = {ic.name: ic.value for ic in parsed_ICs}  # Convert list of objects to a dictionary
+    ic_dict = {ic.name: ic.value for ic in parsed_ICs}                # Convert IC to dict
+    param_dict = {param.name: param.value for param in parsed_params} #Convert Params to dict
 
     fIC.write("% Initial Conditions \n")
     for i in range(Ns):
@@ -1146,14 +1274,15 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
         fIC.write("_IC")
     fIC.write(" ];\n\n\n")
     
-    if len(uniqueFlow) >=1:
+    if len(uniqueFlow) >= 1:
         fIC.write("% Flow Rate Parameters \n")
-        for i in range(len(uniqueFlow)):
-            fIC.write(uniqueFlow[i])
-            fIC.write(" = 1; \n")                    #<- Should be able to set flow rates
-        
+        for name in uniqueFlow:
+            value = param_dict.get(name, 1)  # Get value if exists, otherwise default to 1
+            fIC.write(f"{name} = {value}; \n")  # Use the actual value if available
+
         fIC.write("\n")
-        fIC.write("flow = [ ")
+        
+        fIC.write("flowUp = [ ")
         fIC.write(uniqueFlow[0])
         for i in range(1, len(uniqueFlow)):
             fIC.write(", ")
@@ -1170,7 +1299,7 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     if len(uniqueNBS) >= 1:
         args.append('nbs')
     if len(uniqueFlow) >= 1:
-        args.append('flow')
+        args.append('flowUp')
 
     f.write("options = odeset('RelTol',1e-12,'AbsTol',1e-23);\n\n\n")
 
@@ -1241,6 +1370,20 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
 
     if verbose: print("\tWriting ODEs now....")
 
+    ################################
+    # NEW: Working on the Dilution #
+    ################################
+    
+    DILUTION = True
+    ####Pre-Define the Platelet Species for the Dilution###
+    if DILUTION:
+        platelet_indices = [i for i in range(Ns) if species[i] in parsedPlateletSpecies]
+        for i in platelet_indices:
+            print(f"\tFound Platelet Species {species[i]} at index {i}....")
+
+    exit(-1)
+
+
     for i in range(Ns): #For each Species
         speciesName = species[i]
         isLipidSpecies = "L_noTF" in speciesName or "L_TF" in speciesName
@@ -1252,7 +1395,7 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
         f.write("\n dy(")
         f.write(str(i+1))
         f.write(")  =")
-        for j in range(Nr): #For Each Reaction Reaction
+        for j in range(Nr): #For Each Reaction Rate....
             isLipidReaction    = (parsed_reactions[j].reactionType=="LIPID")
             isFlowReaction     = (parsed_reactions[j].reactionType=="FLOW")
             isFunctionReaction = (parsed_reactions[j].reactionType=="FUNCTION")
@@ -1410,7 +1553,7 @@ parsedParameters      = parseParameters(parameters, verbose)
 ###########################################
 
 # (2a) Do initial parsing of reactions
-parsed_reactions = parseReactions(biochemicalReactions, False)
+parsed_reactions = parseReactions(biochemicalReactions, parsedPlateletSites, False)
 
 # (2b) Check for & Remove Duplicates in reaction list
 unique_reactions = set()
@@ -1422,7 +1565,8 @@ print(f"Begin: Consistency Checking Biochemical Reactions:")
 print("\t(1) Sanity Check: Are there duplicate Reactions?")
 if duplicates:
     print("\t\t---> Suspicious Duplicate Reactions Found. Removing them:")
-    print("\n".join(duplicates))
+    #print("\n".join(duplicates))
+    print("\n".join(r.equation for r in duplicates))
 else:
     print("\t--->Sanity Check PASSED: No Duplicate Reactions Found.")
 
@@ -1438,7 +1582,7 @@ flow_species_count  = {}
 badFlowReactions    = []
 
 # Dictionary counting occurrences of each reaction type
-reaction_type_count = {"LIPID": 0, "PLATELET": 0, "MASS_ACTION": 0, "FLOW": 0, "FUNCTION": 0}
+reaction_type_count = {"LIPID": 0, "PLATELET": 0, "PLATELET_ACTIVATION":0, "MASS_ACTION": 0, "FLOW": 0, "FUNCTION": 0}
 
 # Iterate through each reaction (now unidirectional after parsing)
 for reaction in parsed_reactions:
@@ -1450,6 +1594,9 @@ for reaction in parsed_reactions:
      
     if(reaction.reactionType=="LIPID" or reaction.reactionType=="PLATELET"):
         nbs.append(reaction.rateModifier)
+        
+    if(reaction.reactionType=="PLATELET_ACTIVATION"):
+        print(f"We are here.")##nbs.append(reaction.)
     
     if(reaction.reactionType=="FLOW"):
         flow.append(reaction.rateModifier)
@@ -1605,7 +1752,7 @@ validate_parameters(parsedParameters,unique_species,verbose)
 # Step 4: Create Matlab File Output #
 #####################################
 
-create_matlab_multipleFileOutput(sys.argv[1], prefix, stoich, parsed_reactions, unique_species, rates, unique_rates, unique_nbs, unique_flow, parsed_ICs, parsedParameters, verbose)
+create_matlab_multipleFileOutput(sys.argv[1], prefix, stoich, parsed_reactions, unique_species, rates, unique_rates, unique_nbs, unique_flow, parsed_ICs, parsedParameters, parsedPlateletSpecies, verbose)
 
 ######################################################
 # Step 5: Determine Conserved Quantities (If Needed) #

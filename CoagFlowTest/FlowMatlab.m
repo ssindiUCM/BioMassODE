@@ -18,7 +18,7 @@ end
 
 
 % Set the Kinetic Parameters
-FlowParams
+CoagFlowTest/FlowParams
 
 % Set the Initial Conditions
 CoagFlowTest/FlowIC
@@ -27,7 +27,7 @@ options = odeset('RelTol',1e-12,'AbsTol',1e-23);
 
 
 %------------------------- Main Solve ----------------------%
-[time,y] = ode15s(@(t,y)RHS(t,y,p,kflow), t_start:1:t_final, init_cond, options);
+[time,y] = ode15s(@(t,y)RHS(t,y,p,flowUp), t_start:1:t_final, init_cond, options);
 %-----------------------------------------------------------%
 
 
@@ -48,7 +48,7 @@ end
 %-------------------- RHS Function -------------------%
 %-----------------------------------------------------%
 
-function dy = RHS(t,y,p,flow)
+function dy = RHS(t,y,p,flowUp)
 
 dy = zeros(10,1);
 
@@ -81,38 +81,3 @@ koff_v_p = p(9);
 
 % ODEs from reaction equations 
 
-% IIa
- dy(1)  =  -  kflow * IIa  +  kflow * IIa_up  -  kon_IIa_p * IIa * p2avail  +  koff_IIa_p * IIa_p;
-
-% V
- dy(2)  =  -  kflow * V  +  kflow * V_up  -  kon_v_p * V * p5avail  +  koff_v_p * V_p;
-
-% PL
- dy(3)  =  +  kflow * PL_up  -  kflow * PL  -  k_pla_plus * PL * P_SUB  -  k_pla_act * PL * PL_S  -  k_pla_act * PL * PL_V  -  A(IIa,e2P) * PL;
-
-% P_SUB
- dy(4)  =  -  k_pla_plus * PL * P_SUB  -  k_pla_plus * P_SUB * PL_V  +  k_pla_minus * PL_S;
-
-% PL_S
- dy(5)  =  +  k_pla_plus * PL * P_SUB  +  k_pla_plus * P_SUB * PL_V  -  k_pla_minus * PL_S  +   0 ;
-
-% p5avail
- dy(6)  =  +  5 * k_pla_plus * PL * P_SUB  +  5 * k_pla_act * PL * PL_S  +  5 * k_pla_act * PL * PL_V  -  kon_v_p * V * p5avail  +  koff_v_p * V_p;
-
-% p2avail
- dy(7)  =  +  2 * k_pla_plus * PL * P_SUB  +  2 * k_pla_act * PL * PL_S  +  2 * k_pla_act * PL * PL_V  -  kon_IIa_p * IIa * p2avail  +  koff_IIa_p * IIa_p;
-
-% PL_V
- dy(8)  =  -  k_pla_plus * P_SUB * PL_V  +  k_pla_minus * PL_S  +  k_pla_act * PL * PL_S  +  k_pla_act * PL * PL_V  +  A(IIa,e2P) * PL;
-
-% IIa_p
- dy(9)  =  +  kon_IIa_p * IIa * p2avail  -  koff_IIa_p * IIa_p;
-
-% V_p
- dy(10)  =  +  kon_v_p * V * p5avail  -  koff_v_p * V_p;
-
-
-
-
-
-end

@@ -6,7 +6,7 @@ P_SUB_IC = 10.0 #\mu M - the IC of the P_SUB
 #Parameters
 IIa_up  = IIa_IC #\mu M; Let's see if this works!
 V_up    = V_IC
-PL_up   = 1.0;
+PL_up   = 1.0    #Set to be a random value. 
 Vp      = 10.00 #\mu M; totally made up number!
 e2P     = 0.001 #\mu M; the threshold amount of e2
 np_v    = 5
@@ -14,7 +14,6 @@ np_ii   = 2
 
 #Function; needs to begin with
 FUNCTION A(x,e2P) = x/(e2P + x) #1 nM = 0.001 \mu M
-FUNCTION Dilute(Vp,PL_S,PL_V) = (Vp)/(1 - Vp*(PL_S + PL_V))*(D[PL_S] + D[PL_V])
 
 #Platelet Species
 PL   = PLATELET  #Platlet in Solution
@@ -35,6 +34,7 @@ PL ->, kflow, PL_up, FLOW
 
 #Platelet Mass Action Biochemical Equations
 P_SUB + PL -> PL_S + 5*p5avail + 2*p2avail, k_pla_plus #Activation
+P_SUB + PL -> PL_S + np_v*p5avail + np_ii*p2avail, k_pla_plus, PLATELET_ACTIVATION  #Activation
 P_SUB + PL_V -> PL_S, k_pla_plus
 PL_S -> PL_V + P_SUB, k_pla_minus
 PL_S + PL -> PL_S + PL_V + 5*p5avail + 2*p2avail, k_pla_act
