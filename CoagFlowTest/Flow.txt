@@ -12,7 +12,8 @@ e2P     = 0.001 #\mu M; the threshold amount of e2
 np_v    = 5
 np_ii   = 2
 
-#Function; needs to begin with
+#Function; needs to begin with FUNCTION we have arguments and body; 
+#          Each argument needs to be either a species or a parameter.
 FUNCTION A(x,e2P) = x/(e2P + x) #1 nM = 0.001 \mu M
 
 #Platelet Species
@@ -20,9 +21,12 @@ PL   = PLATELET  #Platlet in Solution
 PL_S = PLATELET  #Platelet in Subendothelium
 PL_V = PLATELET  #Platelet in Volume
 
-#Platelet Sites
-p2avail = PLATELET_SITES
-p5avail = PLATELET_SITES
+#Platelet Site (The only species allowed non-constant reaction rates!)
+p2avail = PLATELET_SITE
+p5avail = PLATELET_SITE
+
+#Lipid Reaction: Making sure this works
+L_TF + X <-> X_st, kon_x, koff_x, nbs_x, LIPID
 
 #Flow Reactions
 IIa ->, kflow, IIa_up, FLOW
@@ -33,18 +37,16 @@ V ->, kflow, V_up, FLOW
 PL ->, kflow, PL_up, FLOW
 
 #Platelet Mass Action Biochemical Equations
-P_SUB + PL -> PL_S + 5*p5avail + 2*p2avail, k_pla_plus #Activation
-P_SUB + PL -> PL_S + np_v*p5avail + np_ii*p2avail, k_pla_plus, PLATELET_ACTIVATION  #Activation
+P_SUB + PL -> PL_S + np_v*p5avail + np_ii*p2avail, k_pla_plus  #Activation
 P_SUB + PL_V -> PL_S, k_pla_plus
 PL_S -> PL_V + P_SUB, k_pla_minus
-PL_S + PL -> PL_S + PL_V + 5*p5avail + 2*p2avail, k_pla_act
-PL_V + PL -> 2*PL_V + 5*p5avail + 2*p2avail, k_pla_act
+PL_S + PL -> PL_S + PL_V + np_v*p5avail + np_v*p2avail, k_pla_act
+PL_V + PL -> 2*PL_V + np_v*p5avail + np_v*p2avail, k_pla_act
 
-#Should Show up.
-PL -> PL_V, kact_e2, A(IIa,e2P), FUNCTION
+#Feed Forward Activation.
+PL -> PL_V + np_v*p5avail + np_ii*p2avail, kact_e2, A(IIa,e2P), FUNCTION
 
 #Binding Sites:
 IIa + p2avail <-> IIa_p, kon_IIa_p, koff_IIa_p
 V + p5avail <-> V_p, kon_v_p, koff_v_p
-
 

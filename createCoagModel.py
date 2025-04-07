@@ -3,7 +3,7 @@
 import sys, re, io, os, textwrap, math, csv
 import numpy as np
 from collections import defaultdict
-
+from collections import Counter
 
 ###############################
 # Error and Usage Information #
@@ -54,13 +54,13 @@ if len(sys.argv) < 2:
                 IIa_up  = IIa_IC #mu M; Let's see if this works!
                 V_up    = V_IC
                 PL_up   = 1.0    #Set to be a random value.
-        * Special classes of species: LIPID, PLATELET, PLATELET_SITES
+        * Special classes of species: LIPID, PLATELET, PLATELET_SITE
             Ex:
                 PL      = PLATELET  #Platlet in Solution
                 PL_S    = PLATELET  #Platelet in Subendothelium
                 PL_V    = PLATELET  #Platelet in Volume
-                p2avail = PLATELET_SITES
-                p5avail = PLATELET_SITES
+                p2avail = PLATELET_SITE
+                p5avail = PLATELET_SITE
                 
     ---------------
     (2) Functions:  NOT FULLY SUPPORTED
@@ -109,10 +109,11 @@ if len(sys.argv) < 2:
       - Splits stoichiometric matrix for A + B -> A + C reactions.
       - Removes duplicate reactions (even one side of bidirectional ones).
       - Checks reaction rate dimensions for consistency.
+      - Initial conditions can be set in the input file.
 
     In-Progress Features (Should Check):
     -----------------------------------
-      - Initial conditions can be set in the input file.
+      - Parameter values set set by constants.
       - Support for inline kinetic rate values:
         Example:
           A + B -> C, k1=0.1
@@ -128,10 +129,9 @@ if len(sys.argv) < 2:
     Problems to Resolve:
     -----------------------------------
     - Check for valid reaction types (i.e., flow types must all have the same FLOW rate)
-    - Currently doesn't handle the reaction: -> 3*A, kflow, Aup correctly
-
+    
     Current Version:
-        Suzanne Sindi, 03/25/2025
+        Suzanne Sindi, 04/07/2025
 
     """))
     sys.exit("Usage: python3 createCoagModel.py StaticCoag.txt")
@@ -140,10 +140,25 @@ if len(sys.argv) < 2:
 # Supporting Functions #
 ########################
 
+def appendToSpecialSpecies(special_species_dict, species_list, species_type):
+    for species in species_list:
+        if species in special_species_dict:
+            existing_type = special_species_dict[species]
+            print(f"Error: Species '{species}' already assigned as type '{existing_type}', cannot reassign as '{species_type}'.")
+        else:
+            special_species_dict[species] = species_type
+
 #Matlab can not handle ":"'s in variable names!
 def transform_string(s):
-    #return s.replace(':', '_')
     return s.replace(':', 'b')
+
+#Get Args: A(IIa,e2P) ->
+def getArgs(function_expr):
+    match = re.search(r'\((.*?)\)', function_expr)
+    if match:
+        args_str = match.group(1)  # everything inside the parentheses
+        return [arg.strip() for arg in args_str.split(',') if arg.strip()]
+    return []
 
 #Converts List to a String;
 def list_to_string(lst):
@@ -165,7 +180,6 @@ def unique_entries_in_order(lst):
     """Return only unique entries from a list, preserving their order."""
     seen = set()
     return [x for x in lst if not (x in seen or seen.add(x))]
-
 
 def formatFwdReaction(reactants, reactant_coeffs, products, product_coeffs):
     # Join reactants with their coefficients
@@ -204,71 +218,47 @@ def parseReactions(reactions, plateletSites, verbose):
         if verbose: print(f"Processing Reaction: '{reaction}'")
         
         # Parse the equation
-        result = parseEquation(reaction,plateletSites)
+        result = parseEquation(reaction,plateletSites,verbose)
         
         # Ensure result is valid before unpacking
         if not result or all(val is None for val in result):
             print(f"\tError: Invalid equation format in reaction: {reaction}")
             continue  # Skip this reaction
             
-        (
-            reactionCount,
-            reactants,
-            reactantCoeffs,
-            products,
-            productCoeffs,
-            rates,
-            reaction_type
-        ) = result
+        (reactants,reactantCoeffs,products,productCoeffs,rates,reaction_type,reaction_modifiers)=result
         if verbose:
-            print(f"\tReaction Count = {reactionCount}")
             print(f"\tReactants = {reactants})")
             print(f"\tCoeffs = {reactantCoeffs})")
             print(f"\tProducts = {products}")
             print(f"\tProducts Coeffs = {productCoeffs}")
             print(f"\tRates = {rates}")
             print(f"\tReaction Type = {reaction_type}")
+            print(f"\tReaction Modifiers = {reaction_modifiers}")
             print(f"**********")
 
-        # Extract rate names and values
-        # Note: There might be different rates & values;
-        names = []
+        # Store (if needed) names and values for each rate
+        names  = []
         values = []
-        for rate in rates:
+        for key, rate in rates.items():
             if '=' in rate:
                 name, value = rate.split('=')
-                names.append(name.strip())
-                values.append(float(value.strip()))
+                names.append(name.strip())  # Store the name part
+                values.append(float(value.strip()))  # Convert the value to a float
             else:
-                names.append(rate.strip())
-                values.append(-1)
-                
-        # Ensure that names and values have at least 3 elements, filling with defaults if needed
-        while len(names) < (reactionCount+1):
-            names.append("")  # Default empty string for missing names
-        while len(values) < (reactionCount+1):
-            values.append(-1)  # Default value of -1 for missing values
-        
+                names.append(rate.strip())  # Store the rate if no '='
+                values.append(-1)  # Assign -1 as a placeholder for missing values
+
+        reactionCount = len(rates);
+
         if reactionCount == 1:  # We add only 1 case, easy
             # Create a Reaction object and add to the list
-            reaction_obj = Reaction(
-                equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs),
-                rateName=names[0],
-                rateValue=values[0],
-                reactants=reactants,
-                reactant_coeffs=reactantCoeffs,
-                products=products,
-                product_coeffs=productCoeffs,
-                reactionType=reaction_type,
-                rateModifier=names[1],
-                rateModifierValue=values[1]
-            )
+            reaction_obj = Reaction(equation = formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs),rateName=names[0],rateValue=values[0],reactants=reactants,reactant_coeffs=reactantCoeffs,products=products, product_coeffs=productCoeffs, reactionType=reaction_type, reactionModifiers = reaction_modifiers)
             parsed_reactions.append(reaction_obj)
         
         elif reactionCount == 2:  # We add 2 objects for bi-directional reactions
-            reaction_fwd = Reaction( equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs), rateName=names[0], rateValue=values[0], reactants=reactants, reactant_coeffs=reactantCoeffs, products=products, product_coeffs=productCoeffs, reactionType=reaction_type, rateModifier=names[2], rateModifierValue=values[2] )
+            reaction_fwd = Reaction( equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs), rateName=names[0], rateValue=values[0], reactants=reactants, reactant_coeffs=reactantCoeffs, products=products, product_coeffs=productCoeffs, reactionType=reaction_type,                 reactionModifiers=reaction_modifiers)
             
-            reaction_rev = Reaction( equation=formatFwdReaction(products, productCoeffs, reactants, reactantCoeffs), rateName=names[1], rateValue=values[1], reactants=products, reactant_coeffs=productCoeffs, products=reactants, product_coeffs=reactantCoeffs, reactionType=reaction_type, rateModifier=names[2], rateModifierValue=values[2] )
+            reaction_rev = Reaction( equation=formatFwdReaction(products, productCoeffs, reactants, reactantCoeffs), rateName=names[1], rateValue=values[1], reactants=products, reactant_coeffs=productCoeffs, products=reactants, product_coeffs=reactantCoeffs, reactionType=reaction_type, reactionModifiers=reaction_modifiers)
             parsed_reactions.append(reaction_fwd)
             parsed_reactions.append(reaction_rev)
         
@@ -278,105 +268,155 @@ def parseReactions(reactions, plateletSites, verbose):
     
     return parsed_reactions
 
+def parse_biochemical_equation(line):
+    parts = [p.strip() for p in line.split(",")]
 
-def parseEquation(equation, plateletSites):
-    # Remove comments if present
-    equation = equation.split("#")[0].strip()
-
-    # Split components based on commas
-    parts = [p.strip() for p in equation.split(",")]
-
-    # Ensure there are at least three components (reactants/products + at least one rate)
     if len(parts) < 2:
-        print(f"Error: Malformed equation - {equation}")
-        return None, None, None, None, None, None, None
+        print(f"Error: Invalid format {line} (must have at least equation and rate)")
+        return None, None, None, None, None
 
-    #Grab the Biochemical Equation
     equation_part = parts[0]
 
-    # Extract reaction type (if specified) or default to "MASS_ACTION"
-    # and reaction rates (either 1, 2 or 3);
-    known_types = {"LIPID", "PLATELET", "FLOW", "MASS_ACTION","FUNCTION"}
-    if parts[-1] in known_types:
-        reaction_type = parts[-1]
-        rates = parts[1:-1]  # capture rates only when reaction type is known
-        
-        # SPECIAL CASE FOR FUNCTION: Separate rate and rate modifier
-        if reaction_type == "FUNCTION":
-            if len(rates) < 2:
-                print(f"Error: FUNCTION reaction must have a rate and a rateModifier - {equation}")
-                return None, None, None, None, None, None, None
-            
-            ratePart = rates[0]  # First part is the actual rate
-            rateModifier = ",".join(rates[1:])  # Join the rest into a single string
-   
-            rates = {ratePart, rateModifier}
-        
-            #if verbose:
-            #    print(f"\tRate Part: {ratePart}")
-            #    print(f"\tRate Modifier: {rateModifier}")
-                    
-    elif parts[-1] == "PLATELET_ACTIVATION":
-        reaction_type = "PLATELET_ACTIVATION"
-        rates = parts[1:-1]
-    else:
-        reaction_type = "MASS_ACTION"
-        rates = parts[1:]  # treat all parts as rates when no reaction type is specified
-
-    # Determine reaction direction and count
+    # Determine arrow type and split equation
     if '<->' in equation_part:
-        reactionCount = 2
-        lhs, rhs = equation_part.split('<->')
-        expected_rate_count = 2 if reaction_type == "MASS_ACTION" else 3
-    elif '->' in equation_part:
-        reactionCount = 1
-        lhs, rhs = equation_part.split('->')
-        expected_rate_count = 1 if (reaction_type == "MASS_ACTION" or reaction_type == "PLATELET_ACTIVATION") else 2
-    else:
-        print(f"Error: Equation must contain '->' or '<->': {equation}")
-        return None, None, None, None, None, None, None
-        
-    # Validate rate count
-    if len(rates) != expected_rate_count:
-        print(f"Error: Expected {expected_rate_count} rates for {reaction_type} reaction '{equation_part}', but got {len(rates)}.")
-        return None, None, None, None, None, None, None
+        arrow = '<->'
+        if len(parts) < 3:
+            print(f"Error: Bidirectional reaction must include both FWD and REV rates: {line}")
+            return None, None, None, None, None
+        lhs, rhs = [s.strip() for s in equation_part.split('<->')]
+        rates = {
+            "FWD_RATE": parts[1],
+            "REV_RATE": parts[2]
+        }
+        other = parts[3:]
 
-    # Split LHS and RHS on "+" and ignore white space
+    elif '->' in equation_part:
+        arrow = '->'
+        lhs, rhs = [s.strip() for s in equation_part.split('->')]
+        rates = {
+            "RATE": parts[1]
+        }
+        other = parts[2:]
+
+    else:
+        print(f"Error: Equation must contain '->' or '<->': {line}")
+        return None, None, None, None, None
+
+    return lhs, rhs, arrow, rates, other
+
+def parse_reaction_type(other, products, coefficients):
+    known_types = {"LIPID", "FLOW", "MASS_ACTION", "FUNCTION"}
+    reactionModifiers = {}
+
+    if len(other) == 0:
+        maybe_type = "MASS_ACTION"
+    else:
+        maybe_type = other[-1]
+
+    if maybe_type not in known_types:
+        print(f"Error: Unknown reaction type '{maybe_type}'")
+        return None, None
+    
+    # Handle based on type
+    if maybe_type == "LIPID":
+        if len(other) != 2:
+            print(f"Error: LIPID reactions must have exactly one modifier before the type — got {other[:-1]}")
+            return None, None
+        reactionModifiers["bindingSites"] = other[0]
+    
+    elif maybe_type == "FLOW":
+        if len(other) != 2:
+            print(f"Error: FLOW reactions must have exactly one modifier before the type — got {other[:-1]}")
+            return None, None
+        reactionModifiers["upstream"] = other[0]
+
+    elif maybe_type == "FUNCTION":
+        if len(other) > 1:
+            function_expr = ",".join(other[:-1])  # Join all but the last element
+            reactionModifiers["function"] = function_expr
+            reactionModifiers["args"] = getArgs(function_expr)
+            
+        else:
+            print(f"Error: FUNCTION reactions must include a function expression — got none")
+            return None, None
+
+    # MASS_ACTION doesn't need anything extra
+    
+    #Add if we have any values in products or coefficients
+    for key, value in zip(products, coefficients):
+        reactionModifiers[key] = value
+
+    return maybe_type, reactionModifiers
+
+
+def parseEquation(equationString, plateletSites, verbose=False):
+
+    #Remove trailing whitespace
+    equationString = equationString.split("#")[0].strip()
+    
+    #Pars into components: lhs arrow rhs, rates, other
+    lhs, rhs, arrow, rates, other = parse_biochemical_equation(equationString)
+    if verbose:
+        print(f"NEW: Equation = {equationString}")
+        print(f"NEW: LHS = {lhs}")
+        print(f"NEW: RHS = {rhs}")
+        print(f"NEW: Arrow = {arrow}")
+        print(f"NEW: Rates = {rates}")
+        print(f"NEW: Other = {other}")
+
+    #(1) Process the LHS and RHS of the biochemical equation:
     reactants = [r.strip() for r in lhs.split('+')] if lhs.strip() else []
     products = [p.strip() for p in rhs.split('+')] if rhs.strip() else []
 
-    # Call extract_coefficients to process reactants and products
-    reactantCoeffs, reactants, plateletSiteReactants, plateletSiteReactantCoeffs = extract_coefficients(reactants,plateletSites)
-    productCoeffs, products, plateletSiteProducts, plateletSiteProductCoeffs   = extract_coefficients(products,plateletSites)
-    
-    #Is there anything suspicious: Well we should create plateletSites!
-    if (len(plateletSiteProducts) == 0) and (reaction_type == "PLATELET_ACTIVATION"):
-        print(f"Warning: Did not create plateletSpecies in a {reaction_type} equation: {equation_part}")
-    if (len(plateletSiteReactants) > 0) and (reaction_type == "PLATELET_ACTIVATION"):
-        print(f"Error: We should only have plateletSites in a {reaction_type} equation: {equation_part}")
-        exit(-1);
-    
-    
-    print(f"CHECKING Reaction: {equation}")
-    print(f"reactantCoeffs: {reactantCoeffs}")
-    print(f"reactants: {reactants}")
-    print(f"plateletSiteReactants: {plateletSiteReactants}")
-    print(f"plateletSiteReactantCoeffs: {plateletSiteReactantCoeffs}")
-    print(f"productCoeffs: {productCoeffs}")
-    print(f"products: {products}")
-    print(f"plateletSiteProducts: {plateletSiteProducts}")
-    print(f"plateletSiteProductCoeffs: {plateletSiteProductCoeffs}")
-    print(f"**************")
+    # Extract_coefficients to process reactants and products
+    # Note: We can only handle non integer coefficients on the RHS. Will throw an error
+    reactantCoeffs, reactants, plateletSiteReactants, plateletSiteReactantCoeffs = extract_coefficients(reactants,plateletSites,"LHS")
+    productCoeffs, products, plateletSiteProducts, plateletSiteProductCoeffs   = extract_coefficients(products,plateletSites,"RHS")
+        
+    # Check LHS
+    if any(x is None for x in [
+        reactantCoeffs, reactants, plateletSiteReactants, plateletSiteReactantCoeffs
+    ]):
+        print(f"Error: Malformed equation on LHS - {equation}")
+        return None, None, None, None, None, None, None
 
-    #if reaction_type == "PLATELET_ACTIVATION":
-        #exit(-1)
+    # Check RHS
+    if any(x is None for x in [
+        productCoeffs, products, plateletSiteProducts, plateletSiteProductCoeffs
+    ]):
+        print(f"Error: Malformed equation on RHS - {equation}")
+        return None, None, None, None, None, None, None
 
-    return reactionCount, reactants, reactantCoeffs, products, productCoeffs, rates, reaction_type
+    #(2) Parse OTHER:
+    reactionType, reactionModifiers  = parse_reaction_type(other,plateletSiteProducts, plateletSiteProductCoeffs)
+
+    if verbose:
+        print(f"NEW reactantCoeffs: {reactantCoeffs}")
+        print(f"NEW reactants: {reactants}")
+        print(f"NEW plateletSiteReactants: {plateletSiteReactants}")
+        print(f"NEW plateletSiteReactantCoeffs: {plateletSiteReactantCoeffs}")
+        print(f"NEW productCoeffs: {productCoeffs}")
+        print(f"NEW products: {products}")
+        print(f"NEW plateletSiteProducts: {plateletSiteProducts}")
+        print(f"NEW plateletSiteProductCoeffs: {plateletSiteProductCoeffs}")
+        print(f"NEW reactionType: {reactionType}")
+        print(f"NEW reactionModifiers: {reactionModifiers}")
+    
+    #(3) Check if we have the right number of rates.
+    # Rate is a dictionary of either "RATE" or "FWD_RATE" "REV_RATE"
+    reaction_count = len(rates)
+    if reaction_count > 1 and reactionType not in {"MASS_ACTION", "LIPID"}:
+        print(f"Error in Equation = {equation}: Only MASS_ACTION and LIPID reactionTypes can be bidirectional")
+        return None, None, None, None, None, None, None
+
+    if verbose: print(f"NEW **************")
+
+    return reactants, reactantCoeffs, products, productCoeffs, rates, reactionType, reactionModifiers
 
 # Extract the Coefficients for a Set of Reactants
 # Added: plateletSiteBool to check if there's plateletSites in the equation!
 # This should only happen with type PLATELET_ACTIVATION
-def extract_coefficients(terms, plateletSites):
+def extract_coefficients(terms, plateletSites, side=None):
     plateletSitesFound = []  # Stores species found in plateletSites
     plateletSiteCoeffs = []  # Stores corresponding coefficients
 
@@ -392,7 +432,6 @@ def extract_coefficients(terms, plateletSites):
         found_platelet_species = None
         platelet_coeff = "1"  # Default coefficient is 1
 
-        # If the term contains multiplication, split it
         if '*' in term:
             parts = term.split('*')
             for part in parts:
@@ -400,14 +439,28 @@ def extract_coefficients(terms, plateletSites):
                 if stripped_part in plateletSites:
                     found_platelet_species = stripped_part
                 else:
-                    platelet_coeff = stripped_part  # Assume other part is the coefficient
+                    platelet_coeff = stripped_part
+        else:
+            if term in plateletSites:
+                found_platelet_species = term
 
         if found_platelet_species:
-            # Store platelet site separately
-            coeffs.append(1)  # Assign standard coefficient 1
+            # Error check if we're on the LHS
+            if side == "LHS":
+                try:
+                    int_val = int(platelet_coeff)  # Check if it's numeric
+                except ValueError:
+                    print(f"Error: Non-numeric coefficient '{platelet_coeff}' for platelet site '{found_platelet_species}' on LHS of equation {terms}.")
+                    return None, None, None, None
+                else:
+                    coeffs.append(int_val)  # Store numeric version
+            else:
+                coeffs.append(1)  # On RHS or general case, use default 1
+
             species.append(found_platelet_species)
             plateletSitesFound.append(found_platelet_species)
-            plateletSiteCoeffs.append(platelet_coeff)  # Store the extracted coefficient
+            plateletSiteCoeffs.append(platelet_coeff)  # Store original value as string
+
         else:
             # Match terms with coefficients followed by '*'
             match = re.match(r'(\d*)\s*\*\s*(\S+)', term)
@@ -421,7 +474,6 @@ def extract_coefficients(terms, plateletSites):
                     coeff_str, species_name = match.groups()
                     coeff = int(coeff_str) if coeff_str else 1
                 else:
-                    # Handle unexpected formats
                     print(f"Error: Invalid term format: {term}")
                     coeffs.append(1)
                     species.append(term.strip())
@@ -431,38 +483,6 @@ def extract_coefficients(terms, plateletSites):
             species.append(species_name.strip())
 
     return coeffs, species, plateletSitesFound, plateletSiteCoeffs
-
-#Deprecated version ONLY if we had NO PlateletActivation
-def extract_coefficientsOLD(terms):
-        
-    # Check if the input contains only an empty string
-    if len(terms) == 1 and terms[0] == '':
-        return [], []
-
-    coeffs = []
-    species = []
-    for term in terms:
-        # Match terms with coefficients followed by '*'
-        match = re.match(r'(\d*)\s*\*\s*(.*)', term)
-        if match:
-            coeff_str, species_name = match.groups()
-            coeff = int(coeff_str) if coeff_str else 1
-            coeffs.append(coeff)
-            species.append(species_name.strip())
-        else:
-            # Match terms with optional coefficients without '*'
-            match = re.match(r'(\d*)\s*(.*)', term)
-            if match:
-                coeff_str, species_name = match.groups()
-                coeff = int(coeff_str) if coeff_str else 1
-                coeffs.append(coeff)
-                species.append(species_name.strip())
-            else:
-                # Handle unexpected formats
-                print(f"Error: Invalid term format: {term}")
-                coeffs.append(1)
-                species.append(term.strip())
-    return coeffs, species
 
 def parseInputFile(verbose=False):
     # Initialize biochemical arrays and counters
@@ -514,7 +534,7 @@ def parseInputFile(verbose=False):
                         if verbose: print(f"\t\tLipid Species: {line}")
 
                     # Check for platelet sites before checking for platelet species
-                    elif "= PLATELET_SITES" in line:
+                    elif "= PLATELET_SITE" in line:
                         plateletSites.append(line)
                         numPlateletSites += 1
                         if verbose:
@@ -612,7 +632,7 @@ def parseList(lines, mode=None, verbose=False):
             "done": "DONE: 1(c): Parse Specified Platelet Species",
             "header_display": "Step 1(c): Specified Platelet Species"
         },
-        "PLATELET_SITES": {
+        "PLATELET_SITE": {
             "header": "Step 1(d): Parse Specified Platelet Binding Sites",
             "done": "DONE: 1(d): Parse Specified Platelet Binding Sites",
             "header_display": "Step 1(d): Specified Platelet Binding Sites"
@@ -628,7 +648,7 @@ def parseList(lines, mode=None, verbose=False):
         line = line.strip()
 
         # Determine parsing behavior based on mode
-        if mode in ["LIPID", "PLATELET","PLATELET_SITES"]:
+        if mode in ["LIPID", "PLATELET","PLATELET_SITE"]:
             keyword = f"= {mode}"
             if keyword in line:
                 item_name = line.split('=')[0].strip()  # Get the part before `=`
@@ -941,8 +961,6 @@ def validate_parameters(parsedParameters, uniqueSpecies, verbose = False):
         else:
             print(f"\tProceeded with caution (reported {numErrors} warnings.")
 
-
-
 def createBiochemicalMatrices(unique_species, parsed_reactions, flowRate, prefix, verbose=False):
     # Define the output file names
     stoich_output_file   = f"{prefix}Stoich.csv"
@@ -958,16 +976,20 @@ def createBiochemicalMatrices(unique_species, parsed_reactions, flowRate, prefix
     bad_rates = s.check_rates()
     
     if len(set(flowRate)) > 1:
-        print("Error: Flow list contains multiple unique values.")
-        exit(-1)
-    else:
+       if verbose: print(f"Error: Flow list contains multiple unique values: {flowRate}.")
+       exit(-1)
+    elif len(set(flowRate)) > 0:
         uniqueFlowRate = flowRate[0];
+        if verbose: print(f"Processing Unique Flow Rate: {uniqueFlowRate}")
+    else:
+        if verbose: print(f"Model has NO Flow Rates")
+
 
     if len(bad_rates) > 0:
         print(f"Error: We found some biochemical rates with different dimensions.")
         for rate, column_sum in bad_rates.items():
-            if(not rate == uniqueFlowRate):
-                print(f"Rate {rate}: Sum of columns = {column_sum}")
+            #if(not rate == uniqueFlowRate):
+            print(f"Rate {rate}: Sum of columns = {column_sum}")
     else:
         if verbose: print(f"All rates are correct dimension")
 
@@ -1003,7 +1025,7 @@ class Parameter:
 class Reaction:
     index_counter = 0  # Class variable to keep track of the index
 
-    def __init__(self, equation, rateName, rateValue, reactants, reactant_coeffs, products, product_coeffs,reactionType,rateModifier,rateModifierValue):
+    def __init__(self, equation, rateName, rateValue, reactants, reactant_coeffs, products, product_coeffs,reactionType, reactionModifiers): #, rateModifier,rateModifierValue):
         self.equation = equation
         self.rateName  = rateName
         self.rateValue = rateValue
@@ -1012,8 +1034,9 @@ class Reaction:
         self.products = products
         self.product_coeffs = product_coeffs
         self.reactionType = reactionType
-        self.rateModifier = rateModifier
-        self.rateModifierValue = rateModifierValue
+        self.reactionModifiers = reactionModifiers
+        #self.rateModifier = rateModifier
+        #self.rateModifierValue = rateModifierValue
         self.index = Reaction.index_counter  # Assign the current index
         Reaction.index_counter += 1  # Increment the index for the next reaction
 
@@ -1022,7 +1045,8 @@ class Reaction:
                 f"rateValue={self.rateValue}, reactants={self.reactants}, "
                 f"reactant_coeffs={self.reactant_coeffs}, products={self.products}, "
                 f"product_coeffs={self.product_coeffs}, rxn_type={self.reactionType}, "
-                f"rate_modifier = {self.rateModifier}, rate_modifierValue = {self.rateModifierValue}")
+                f"reactionModifiers={self.reactionModifiers}")
+                #f"rate_modifier = {self.rateModifier}, rate_modifierValue = {self.rateModifierValue}")
 
     def __eq__(self, other):
         if isinstance(other, Reaction):
@@ -1161,7 +1185,7 @@ class Stoich:
 
 #def create_matlab_multipleFileOutput(input_file: str, parsed_reactions: list, outputPrefix: str, s: Stoich, species: list, rates: list, uniqueRates: list, uniqueNBS: list, v: bool = False):
 
-def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoich, parsed_reactions: list, species: list, rates: list, uniqueRates: list, uniqueNBS: list, uniqueFlow: list, parsed_ICs: list, parsed_params: list, parsedPlateletSpecies: list, verbose: bool = False):
+def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoich, parsed_reactions: list, species: list, rates: list, uniqueRates: list, uniqueNBS: list, uniqueFlow: list, uniqueftnArgs: list, parsed_ICs: list, parsed_params: list, specialSpecies: list, verbose: bool = False):
     
     if verbose:
         print('-' * 50)
@@ -1220,7 +1244,7 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     fParam.write("% Kinetic Parameters \n")
     for i in range(len(uniqueRates)):
         fParam.write(uniqueRates[i])
-        fParam.write(" = 1; \n")                            #<- Should be able to set flow rates
+        fParam.write(" = 1; \n")                            #<- Should be able to set initial parameter
 
     fParam.write("\np = [ ")
     fParam.write(uniqueRates[0])
@@ -1233,16 +1257,28 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
         fParam.write("% Binding Site Parameters \n")
         for i in range(len(uniqueNBS)):
             fParam.write(uniqueNBS[i])
-            #fParam.write(str(uniqueNBS[i]))
-            fParam.write(" = 1; \n")                          #<- Should be able to set flow rates
+            fParam.write(" = 1; \n")                          #<- Should be able to set initial parameter
         
         fParam.write("\n")
         fParam.write("nbs = [ ")
         fParam.write(uniqueNBS[0])
-        #fParam.write(str(uniqueNBS[0]))
         for i in range(1, len(uniqueNBS)):
             fParam.write(", ")
             fParam.write(uniqueNBS[i])
+        fParam.write(" ];\n\n\n")
+
+    if len(uniqueftnArgs) >=1:
+        fParam.write("% Function Arguments \n")
+        for i in range(len(uniqueftnArgs)):
+            fParam.write(uniqueftnArgs[i])
+            fParam.write(" = 1; \n")                          #<- Should be able to set initial parameter
+        
+        fParam.write("\n")
+        fParam.write("otherArgs = [ ")
+        fParam.write(uniqueftnArgs[0])
+        for i in range(1, len(uniqueftnArgs)):
+            fParam.write(", ")
+            fParam.write(uniqueftnArgs[i])
         fParam.write(" ];\n\n\n")
 
     f.write("% Set the Kinetic Parameters\n")
@@ -1277,7 +1313,7 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     if len(uniqueFlow) >= 1:
         fIC.write("% Flow Rate Parameters \n")
         for name in uniqueFlow:
-            value = param_dict.get(name, 1)  # Get value if exists, otherwise default to 1
+            value = param_dict.get(name, 1)     # Get value if exists, otherwise default to 1
             fIC.write(f"{name} = {value}; \n")  # Use the actual value if available
 
         fIC.write("\n")
@@ -1300,6 +1336,8 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
         args.append('nbs')
     if len(uniqueFlow) >= 1:
         args.append('flowUp')
+    if len(uniqueftnArgs) >=1:
+        args.append('otherArgs')
 
     f.write("options = odeset('RelTol',1e-12,'AbsTol',1e-23);\n\n\n")
 
@@ -1366,6 +1404,24 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
             f.write(");  \n")
         f.write("\n\n")
 
+    if len(uniqueftnArgs) >=1:
+        f.write("% Rename Function Arguments Site \n")
+        for i in range(len(uniqueftnArgs)):
+            f.write(str(uniqueftnArgs[i]))
+            f.write(" = otherArgs(")
+            f.write(str(i+1))
+            f.write(");  \n")
+        f.write("\n\n")
+
+    if len(uniqueFlow) >=1:
+        f.write("% Rename Flow Up \n")
+        for i in range(len(uniqueFlow)):
+            f.write(str(uniqueFlow[i]))
+            f.write(" = flowUp(")
+            f.write(str(i+1))
+            f.write(");  \n")
+        f.write("\n\n")
+
     f.write("% ODEs from reaction equations \n\n")
 
     if verbose: print("\tWriting ODEs now....")
@@ -1374,22 +1430,24 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     # NEW: Working on the Dilution #
     ################################
     
-    DILUTION = True
+    DILUTION = False #True
     ####Pre-Define the Platelet Species for the Dilution###
     if DILUTION:
         platelet_indices = [i for i in range(Ns) if species[i] in parsedPlateletSpecies]
         for i in platelet_indices:
             print(f"\tFound Platelet Species {species[i]} at index {i}....")
 
-    exit(-1)
+    #exit(-1)
 
 
     for i in range(Ns): #For each Species
         speciesName = species[i]
-        isLipidSpecies = "L_noTF" in speciesName or "L_TF" in speciesName
+        isLipidSpecies = specialSpecies.get(speciesName) == "LIPID"
+        isPlateletSite = specialSpecies.get(speciesName) == "PLATELET_SITE"
+        #isLipidSpecies = "L_noTF" in speciesName or "L_TF" in speciesName
         isOnEmptyLipid = "_s" in speciesName and (not "_st" in speciesName) and (not "_sn" in speciesName)
-        isOnTFLipid = "_st" in speciesName
-        isOnSilica = "_sn" in speciesName
+        isOnTFLipid    = "_st" in speciesName
+        isOnSilica     = "_sn" in speciesName
         f.write("% ")
         f.write(str(transform_string(species[i])))
         f.write("\n dy(")
@@ -1424,8 +1482,12 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
                 # L_dt     = +rate*nbs
                 if isLipidReaction and not (isLipidSpecies or isOnEmptyLipid or isOnTFLipid): #V_s
                     f.write("/")
-                    f.write(parsed_reactions[j].rateModifier)
-                                        
+                    f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
+                 
+                if isFunctionReaction:
+                    f.write(" * ")
+                    f.write(parsed_reactions[j].reactionModifiers["function"])
+                
                 ##################
                 #Part 3: Calculate the forward rate from reactant concentration
                 ##################
@@ -1456,14 +1518,26 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
                 #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
                 if isLipidSpecies: #This must be a koff
                     f.write("*")
-                    f.write(parsed_reactions[j].rateModifier)
+                    f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
+                    
                 if isLipidReaction and ( not isLipidSpecies ) and (isOnEmptyLipid or isOnTFLipid): #V_s
                     f.write("/")
-                    f.write(parsed_reactions[j].rateModifier)
+                    f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
                     
                 if isFlowReaction:
                     f.write(" * ")
-                    f.write(parsed_reactions[j].rateModifier)
+                    f.write(parsed_reactions[j].reactionModifiers["upstream"])
+
+                if isFunctionReaction:
+                    f.write(" * ")
+                    f.write(parsed_reactions[j].reactionModifiers["function"])
+
+                if isPlateletSite and speciesName in parsed_reactions[j].reactionModifiers:
+                    #print(f"We are processing a species {speciesName} for a reaction {parsed_reactions[j]}")
+                    value = parsed_reactions[j].reactionModifiers[speciesName]
+                    if value:  # make sure it's not empty/None
+                        f.write(" * ")
+                        f.write(value)
 
                 ##################
                 #Part 3: Calculate the forward rate from reactant concentration
@@ -1489,6 +1563,22 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
 
     f.write("\n\n\n\n")
     f.write("end")
+    f.write("\n\n")
+
+    ##Output Helper Functions:
+    function_dicts = [ {'name': 'A', 'args': ['x', 'e2P'], 'body': 'x/(e2P + x)'}, {'name': 'B', 'args': ['y', 'e2Q'], 'body': 'y/(e2Q + y)'}]
+
+    f.write("%Beginning of Helper Functions\n")
+
+    for function_dict in function_dicts:
+        # Generate the MATLAB code from the function dictionary
+        matlab_code = create_matlab_function(function_dict)
+    
+        # Write the generated function code to the file
+        f.write(matlab_code)
+        f.write("\n\n")  # Add some spacing between functions if desired
+
+    f.write("%End of Helper Functions\n")
     
     if verbose:
         print(f"DONE! Successfully created Matlab Files")
@@ -1511,6 +1601,29 @@ def add_line_continuations(code: str, max_line_length: int = 80) -> str:
     
     return '\n'.join(new_lines)
 
+def create_matlab_function(function_dict):
+    """
+    This function parses the dictionary and generates a corresponding MATLAB function.
+    
+    Parameters:
+    - function_dict (dict): A dictionary with 'name', 'args', and 'body' keys.
+
+    Returns:
+    - str: A string that represents the MATLAB function code.
+    """
+    function_name = function_dict['name']
+    args = ', '.join(function_dict['args'])
+    body = function_dict['body']
+
+    # Generate the MATLAB function
+    matlab_function = f"function output = {function_name}({args})\n"
+    matlab_function += f"    % Function: {function_name}\n"
+    matlab_function += f"    % Arguments: {', '.join(function_dict['args'])}\n"
+    matlab_function += f"    % Body: {body}\n"
+    matlab_function += f"    output = {body};\n"
+    matlab_function += "end\n"
+    
+    return matlab_function
 
 #################################################################################
 # *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-* Main Code *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-* #
@@ -1543,17 +1656,23 @@ parameters           = parsed_data["parameterCondition"]
 
 parsed_ICs            = parseInitialConditions(initialConditions,verbose)
 parsedLipidSpecies    = parseList(lipidSpecies,"LIPID", verbose)
-parsedPlateletSpecies = parseList(plateletSpecies,"PLATELET",verbose)
-parsedPlateletSites   = parseList(plateletSites,"PLATELET_SITES",verbose)
+parsedPlateletSpecies = parseList(plateletSpecies,"PLATELET", verbose)
+parsedPlateletSites   = parseList(plateletSites,"PLATELET_SITE", verbose)
 parsedFunctions       = parseFunction(functionsDefined,verbose)
 parsedParameters      = parseParameters(parameters, verbose)
+
+#Store all special named species
+specialSpecies = {} #Dictionary for special species
+appendToSpecialSpecies(specialSpecies,parsedLipidSpecies,"LIPID")
+appendToSpecialSpecies(specialSpecies,parsedPlateletSpecies,"PLATELET")
+appendToSpecialSpecies(specialSpecies,parsedPlateletSites,"PLATELET_SITE")
 
 ###########################################
 # Step 2: Parse the Biochemical Reactions #
 ###########################################
 
 # (2a) Do initial parsing of reactions
-parsed_reactions = parseReactions(biochemicalReactions, parsedPlateletSites, False)
+parsed_reactions = parseReactions(biochemicalReactions, parsedPlateletSites, True)
 
 # (2b) Check for & Remove Duplicates in reaction list
 unique_reactions = set()
@@ -1571,11 +1690,12 @@ else:
     print("\t--->Sanity Check PASSED: No Duplicate Reactions Found.")
 
 # (2c) Determine the Number of reaction types, List of Unique Species, Unique Reaction Rates
-species  = []
-rates    = []
-nbs      = []
-flow     = []
-flowRate = []
+species      = []
+rates        = []
+nbs          = []
+flow         = []
+flowRate     = []
+functionArgs = []
 
 # Dictionary to track the flow reactions for each species
 flow_species_count  = {}
@@ -1593,13 +1713,24 @@ for reaction in parsed_reactions:
         reaction_type_count[reaction.reactionType] += 1
      
     if(reaction.reactionType=="LIPID" or reaction.reactionType=="PLATELET"):
-        nbs.append(reaction.rateModifier)
+        nbs.append(reaction.reactionModifiers["bindingSites"])
         
-    if(reaction.reactionType=="PLATELET_ACTIVATION"):
-        print(f"We are here.")##nbs.append(reaction.)
+    if(reaction.reactionType == "MASS_ACTION"):
+        # Check for plateletSites in reactionModifiers
+        for site in parsedPlateletSites:
+            if site in reaction.reactionModifiers:
+                val = reaction.reactionModifiers[site]
+                # Check if val is NOT an integer (could be symbolic expression or parameter name)
+                try:
+                    int(val)
+                except ValueError:
+                    nbs.append(val)  # Add non-integer-valued platelet site modifier
     
+    if(reaction.reactionType == "FUNCTION"):
+        functionArgs.extend(reaction.reactionModifiers["args"])
+
     if(reaction.reactionType=="FLOW"):
-        flow.append(reaction.rateModifier)
+        flow.append(reaction.reactionModifiers["upstream"])
         flowRate.append(reaction.rateName)
         if not (len(reaction.reactants) == 1 and len(reaction.products) == 0) and \
            not (len(reaction.reactants) == 0 and len(reaction.products) == 1):
@@ -1628,6 +1759,22 @@ unique_species = unique_entries_in_order(species)
 unique_rates   = unique_entries_in_order(rates)
 unique_nbs     = unique_entries_in_order(nbs)
 unique_flow    = unique_entries_in_order(flow)
+unique_ftnArgs = unique_entries_in_order(functionArgs)
+
+#Error Check: Am I using all unique names?
+all_variable_names = unique_species + unique_rates + unique_nbs + unique_flow
+name_counts        = Counter(all_variable_names)
+duplicates         = [name for name, count in name_counts.items() if count > 1]
+
+if duplicates:
+    print(f"Error: Duplicate variable names found across categories:", duplicates)
+else:
+    print(f"All variable names are unique across categories.")
+
+#Update: Retain only Unique_FtnArgs that do NOT occur elsewhere
+print(f"Before Filtering: {unique_ftnArgs}")
+unique_ftnArgs = [arg for arg in unique_ftnArgs if arg not in all_variable_names]
+print(f"After Filtering: {unique_ftnArgs}")
 
 # Error Check on Flow Reactions:
 if reaction_type_count["FLOW"] > 0:
@@ -1699,12 +1846,12 @@ print("-" * 50)
 #   - Unspecified Parameters  (go at the end of parameters list in p variable, default) p[extra]
 #   - Given kinetic rates     (already listed as a kinetic rate in another equation) use it's p[i]
 #   - One of the biochemical species unique_species (use it's y[i] value)
-#(5) Specified Parameters might be:
+#(6) Make it possible to be able to in-line declare a biochemical rate:
+#    - Check that any rate for a parameter is the same (error check)
+#DONE (5) Specified Parameters might be:
 #    - Arguments to functions (end of parameters)  <- p
 #    - NBS or Platelet binding rates               <- NBS
 #    - Flow rate (this is potentially special      <- Flow goes separate
-#(6) Make it possible to be able to in-line declare a biochemical rate:
-#    - Check that any rate for a parameter is the same (error check)
 #(7) DONE: For kflow reactions; do we always want an in-and-out; then maybe make it 1 equation:
 #(8) DONE: All the FLOW reactions should have the same parameter (this is an error check)
 #(9) DONE: All Flow reactions should have either [1,0] or [0,1] species reactants; should check.
@@ -1727,7 +1874,7 @@ print(f"Unique Species: {unique_species}")
 print(f"Lipid Species: {parsedLipidSpecies}")
 print(f"Platelet Species: {parsedPlateletSpecies}")
 print(f"Platelet Sites: {parsedPlateletSites}")
-print(f"Parameters: {parsedParameters}")
+print(f"Parameters: {parsedParameters}")  #Should also pull out the values for biochemical rates from rxns.
 
 print(f"(Q): Do all Specified Species Occur in the Biochemical Reactions?")
 
@@ -1752,7 +1899,7 @@ validate_parameters(parsedParameters,unique_species,verbose)
 # Step 4: Create Matlab File Output #
 #####################################
 
-create_matlab_multipleFileOutput(sys.argv[1], prefix, stoich, parsed_reactions, unique_species, rates, unique_rates, unique_nbs, unique_flow, parsed_ICs, parsedParameters, parsedPlateletSpecies, verbose)
+create_matlab_multipleFileOutput(sys.argv[1], prefix, stoich, parsed_reactions, unique_species, rates, unique_rates, unique_nbs, unique_flow, unique_ftnArgs, parsed_ICs, parsedParameters, specialSpecies, verbose)
 
 ######################################################
 # Step 5: Determine Conserved Quantities (If Needed) #
