@@ -1,6 +1,6 @@
 #Example Initial Conditions
-IIa_IC = 5.0;  #µM
-V_IC   = 0;
+IIa_IC   = 5.0;  #µM
+V_IC     = 0;
 P_SUB_IC = 10.0 #\mu M - the IC of the P_SUB
 
 #Parameters
@@ -30,8 +30,8 @@ L_TF + X <-> X_st, kon_x, koff_x, nbs_x, LIPID
 
 #Flow Reactions
 IIa ->, kflow, IIa_up, FLOW
--> IIa, kflow, IIa_up, FLOW
-V ->, kflow, V_up, FLOW
+-> IIa, kflow, IIa_up, FLOW #If it's flow out - we shouldn't need this.
+V ->, kflow,V_up, FLOW
 -> V, kflow, V_up, FLOW
 -> PL, kflow, PL_up, FLOW
 PL ->, kflow, PL_up, FLOW
@@ -49,4 +49,3 @@ PL -> PL_V + np_v*p5avail + np_ii*p2avail, kact_e2, A(IIa,e2P), FUNCTION
 #Binding Sites:
 IIa + p2avail <-> IIa_p, kon_IIa_p, koff_IIa_p
 V + p5avail <-> V_p, kon_v_p, koff_v_p
-

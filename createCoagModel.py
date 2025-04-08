@@ -1185,7 +1185,7 @@ class Stoich:
 
 #def create_matlab_multipleFileOutput(input_file: str, parsed_reactions: list, outputPrefix: str, s: Stoich, species: list, rates: list, uniqueRates: list, uniqueNBS: list, v: bool = False):
 
-def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoich, parsed_reactions: list, species: list, rates: list, uniqueRates: list, uniqueNBS: list, uniqueFlow: list, uniqueftnArgs: list, parsed_ICs: list, parsed_params: list, specialSpecies: list, verbose: bool = False):
+def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoich, parsed_reactions: list, species: list, rates: list, uniqueRates: list, uniqueNBS: list, uniqueFlow: list, uniqueftnArgs: list, parsed_ICs: list, parsed_params: list, specialSpecies: list, function_dicts: list, verbose: bool = False):
     
     if verbose:
         print('-' * 50)
@@ -1566,8 +1566,6 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     f.write("\n\n")
 
     ##Output Helper Functions:
-    function_dicts = [ {'name': 'A', 'args': ['x', 'e2P'], 'body': 'x/(e2P + x)'}, {'name': 'B', 'args': ['y', 'e2Q'], 'body': 'y/(e2Q + y)'}]
-
     f.write("%Beginning of Helper Functions\n")
 
     for function_dict in function_dicts:
@@ -1899,7 +1897,9 @@ validate_parameters(parsedParameters,unique_species,verbose)
 # Step 4: Create Matlab File Output #
 #####################################
 
-create_matlab_multipleFileOutput(sys.argv[1], prefix, stoich, parsed_reactions, unique_species, rates, unique_rates, unique_nbs, unique_flow, unique_ftnArgs, parsed_ICs, parsedParameters, specialSpecies, verbose)
+print(f"Functions Defined: {functionsDefined}")
+
+create_matlab_multipleFileOutput(sys.argv[1], prefix, stoich, parsed_reactions, unique_species, rates, unique_rates, unique_nbs, unique_flow, unique_ftnArgs, parsed_ICs, parsedParameters, specialSpecies, parsedFunctions, verbose)
 
 ######################################################
 # Step 5: Determine Conserved Quantities (If Needed) #

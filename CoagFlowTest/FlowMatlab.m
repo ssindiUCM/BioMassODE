@@ -1,4 +1,4 @@
-function [time,y] = FlowMatlab(t_start,t_final)
+function [time,y] = CoagFlowTest/FlowMatlab(t_start,t_final)
 % Solves a system of ODEs from t=t_start to t=t_final 
 % If no start time is given, then t_start = 0 
 % If no start or final time is given, then t_start = 0, t_final = 30*60 
@@ -18,24 +18,26 @@ end
 
 
 % Set the Kinetic Parameters
-FlowParams
+CoagFlowTest/FlowParams
 
 % Set the Initial Conditions
-FlowIC
+CoagFlowTest/FlowIC
 
 options = odeset('RelTol',1e-12,'AbsTol',1e-23);
+
 
 %------------------------- Main Solve ----------------------%
 [time,y] = ode15s(@(t,y)RHS(t,y,p,nbs,flowUp,otherArgs), t_start:1:t_final, init_cond, options);
 %-----------------------------------------------------------%
 
+
 % Rename solution components
-FlowRename
+CoagFlowTest/FlowRename
 %  
 % Place plots or other calculations here
 %   
 % Example: 
-plot(time, L_TF, 'k-o', 'LineWidth', 4, 'MarkerSize', 4); legend('L_TF');
+% plot(time, L_TF, 'k-o', 'LineWidth', 4, 'MarkerSize', 4); legend('L_TF');
 
 
 end
@@ -52,6 +54,7 @@ dy = zeros(13,1);
 
 
 % Rename Variables 
+
 L_TF   = y(1); 
 X   = y(2); 
 X_st   = y(3); 
@@ -65,6 +68,7 @@ p2avail   = y(10);
 PL_V   = y(11); 
 IIa_p   = y(12); 
 V_p   = y(13); 
+
 
 % Rename Kinetic Parameters 
 kon_x = p(1);  
@@ -149,14 +153,6 @@ function output = A(x, e2P)
     % Arguments: x, e2P
     % Body: x/(e2P + x)
     output = x/(e2P + x);
-end
-
-
-function output = B(y, e2Q)
-    % Function: B
-    % Arguments: y, e2Q
-    % Body: y/(e2Q + y)
-    output = y/(e2Q + y);
 end
 
 
