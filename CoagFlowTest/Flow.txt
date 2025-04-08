@@ -29,12 +29,12 @@ p5avail = PLATELET_SITE
 L_TF + X <-> X_st, kon_x, koff_x, nbs_x, LIPID
 
 #Flow Reactions
-IIa ->, kflow, IIa_up, FLOW
+IIa ->, kflow, FLOW
 -> IIa, kflow, IIa_up, FLOW #If it's flow out - we shouldn't need this.
-V ->, kflow,V_up, FLOW
+V ->, kflow, FLOW
 -> V, kflow, V_up, FLOW
 -> PL, kflow, PL_up, FLOW
-PL ->, kflow, PL_up, FLOW
+PL ->, kflow, FLOW
 
 #Platelet Mass Action Biochemical Equations
 P_SUB + PL -> PL_S + np_v*p5avail + np_ii*p2avail, k_pla_plus  #Activation

@@ -432,7 +432,7 @@ nbs_PS = nbs(12);
 % ODEs from reaction equations 
 
 % L_TF
- dy(1)  =  -  kon_ii * L_TF * II  +  koff_ii*nbs_ii * II_st  -  kon_iif * L_TF * IIf  +  koff_iif*nbs_ii * IIf_st  -  kon_v * L_TF * V  +  koff_v*nbs_v * V_st  -  kon_vh * L_TF * Vh  +  koff_vh*nbs_v * Vh_st  -  kon_va * L_TF * Va  +  koff_va*nbs_v * Va_st  -  kon_vii * L_TF * VII  +  koff_vii*nbs_vii * VII_st  -  kon_viia * L_TF * VIIa  +  koff_viia*nbs_vii * VIIa_st  -  kon_viii * L_TF * VIII  +  koff_viii*nbs_viii * VIII_st  -  kon_viiia * L_TF * VIIIa  +  koff_viiia*nbs_viii * VIIIa_st  -  kon_ix * L_TF * IX  +  koff_ix*nbs_ix * IX_st  -  kon_ixa * L_TF * IXa  +  koff_ixa*nbs_ixa * IXa_st  -  kon_x * L_TF * X  +  koff_x*nbs_x * X_st  -  kon_xa * L_TF * Xa  +  koff_xa*nbs_x * Xa_st  -  kon_tfpixa * L_TF * XabTFPI  +  koff_tfpixa*nbs_tfpixa * Xa_stbTFPI  -  kon_tfpivh * L_TF * TFPIbVh  +  koff_tfpivh*nbs_tfpivh * TFPIbVh_st  -  kon_ixat * L_TF * IXabAT  +  koff_ixat*nbs_ixaAT * IXa_stbAT  -  kon_xaat * L_TF * XabAT  +  koff_xaat*nbs_xaAT * Xa_stbAT  -  kon_ps * L_TF * PS  +  koff_ps*nbs_PS * PS_st;
+ dy(1)  =  -  kon_ii/nbs_ii * L_TF * II  +  koff_ii * II_st  -  kon_iif/nbs_ii * L_TF * IIf  +  koff_iif * IIf_st  -  kon_v/nbs_v * L_TF * V  +  koff_v * V_st  -  kon_vh/nbs_v * L_TF * Vh  +  koff_vh * Vh_st  -  kon_va/nbs_v * L_TF * Va  +  koff_va * Va_st  -  kon_vii/nbs_vii * L_TF * VII  +  koff_vii * VII_st  -  kon_viia/nbs_vii * L_TF * VIIa  +  koff_viia * VIIa_st  -  kon_viii/nbs_viii * L_TF * VIII  +  koff_viii * VIII_st  -  kon_viiia/nbs_viii * L_TF * VIIIa  +  koff_viiia * VIIIa_st  -  kon_ix/nbs_ix * L_TF * IX  +  koff_ix * IX_st  -  kon_ixa/nbs_ixa * L_TF * IXa  +  koff_ixa * IXa_st  -  kon_x/nbs_x * L_TF * X  +  koff_x * X_st  -  kon_xa/nbs_x * L_TF * Xa  +  koff_xa * Xa_st  -  kon_tfpixa/nbs_tfpixa * L_TF * XabTFPI  +  koff_tfpixa * Xa_stbTFPI  -  kon_tfpivh/nbs_tfpivh * L_TF * TFPIbVh  +  koff_tfpivh * TFPIbVh_st  -  kon_ixat/nbs_ixaAT * L_TF * IXabAT  +  koff_ixat * IXa_stbAT  -  kon_xaat/nbs_xaAT * L_TF * XabAT  +  koff_xaat * Xa_stbAT  -  kon_ps/nbs_PS * L_TF * PS  +  koff_ps * PS_st;
 
 % II
  dy(2)  =  -  kon_ii/nbs_ii * L_TF * II  +  koff_ii * II_st  -  kon_ii/nbs_ii * II * L_noTF  +  koff_ii * II_s;
@@ -441,7 +441,7 @@ nbs_PS = nbs(12);
  dy(3)  =  +  kon_ii/nbs_ii * L_TF * II  -  koff_ii * II_st  -  ka_s_ii_xavh * II_st * Xa_stbVh_st  +  kd_s_iixavh * II_stbXa_stbVh_st  -  ka_s_ii_xava * II_st * Xa_stbVa_st  +  kd_s_iixava * II_stbXa_stbVa_st;
 
 % L_noTF
- dy(4)  =  -  kon_ii * II * L_noTF  +  koff_ii*nbs_ii * II_s  -  kon_iif * L_noTF * IIf  +  koff_iif*nbs_ii * IIf_s  -  kon_v * L_noTF * V  +  koff_v*nbs_v * V_s  -  kon_vh * L_noTF * Vh  +  koff_vh*nbs_v * Vh_s  -  kon_va * L_noTF * Va  +  koff_va*nbs_v * Va_s  -  kon_vii * L_noTF * VII  +  koff_vii*nbs_vii * VII_s  -  kon_viia * L_noTF * VIIa  +  koff_viia*nbs_vii * VIIa_s  -  kon_viii * L_noTF * VIII  +  koff_viii*nbs_viii * VIII_s  -  kon_viiia * L_noTF * VIIIa  +  koff_viiia*nbs_viii * VIIIa_s  -  kon_ix * L_noTF * IX  +  koff_ix*nbs_ix * IX_s  -  kon_ixa * L_noTF * IXa  +  koff_ixa*nbs_ixa * IXa_s  -  kon_x * L_noTF * X  +  koff_x*nbs_x * X_s  -  kon_xa * L_noTF * Xa  +  koff_xa*nbs_x * Xa_s  -  kon_tfpixa * L_noTF * XabTFPI  +  koff_tfpixa*nbs_tfpixa * Xa_sbTFPI  -  kon_tfpivh * L_noTF * TFPIbVh  +  koff_tfpivh*nbs_tfpivh * TFPIbVh_s  -  kon_ixat * L_noTF * IXabAT  +  koff_ixat*nbs_ixaAT * IXa_sbAT  -  kon_xaat * L_noTF * XabAT  +  koff_xaat*nbs_xaAT * Xa_sbAT  -  kon_ps * L_noTF * PS  +  koff_ps*nbs_PS * PS_s;
+ dy(4)  =  -  kon_ii/nbs_ii * II * L_noTF  +  koff_ii * II_s  -  kon_iif/nbs_ii * L_noTF * IIf  +  koff_iif * IIf_s  -  kon_v/nbs_v * L_noTF * V  +  koff_v * V_s  -  kon_vh/nbs_v * L_noTF * Vh  +  koff_vh * Vh_s  -  kon_va/nbs_v * L_noTF * Va  +  koff_va * Va_s  -  kon_vii/nbs_vii * L_noTF * VII  +  koff_vii * VII_s  -  kon_viia/nbs_vii * L_noTF * VIIa  +  koff_viia * VIIa_s  -  kon_viii/nbs_viii * L_noTF * VIII  +  koff_viii * VIII_s  -  kon_viiia/nbs_viii * L_noTF * VIIIa  +  koff_viiia * VIIIa_s  -  kon_ix/nbs_ix * L_noTF * IX  +  koff_ix * IX_s  -  kon_ixa/nbs_ixa * L_noTF * IXa  +  koff_ixa * IXa_s  -  kon_x/nbs_x * L_noTF * X  +  koff_x * X_s  -  kon_xa/nbs_x * L_noTF * Xa  +  koff_xa * Xa_s  -  kon_tfpixa/nbs_tfpixa * L_noTF * XabTFPI  +  koff_tfpixa * Xa_sbTFPI  -  kon_tfpivh/nbs_tfpivh * L_noTF * TFPIbVh  +  koff_tfpivh * TFPIbVh_s  -  kon_ixat/nbs_ixaAT * L_noTF * IXabAT  +  koff_ixat * IXa_sbAT  -  kon_xaat/nbs_xaAT * L_noTF * XabAT  +  koff_xaat * Xa_sbAT  -  kon_ps/nbs_PS * L_noTF * PS  +  koff_ps * PS_s;
 
 % II_s
  dy(5)  =  +  kon_ii/nbs_ii * II * L_noTF  -  koff_ii * II_s  -  ka_s_ii_xavh * II_s * Xa_sbVh_s  +  kd_s_iixavh * II_sbXa_sbVh_s  -  ka_s_ii_xava * II_s * Xa_sbVa_s  +  kd_s_iixava * II_sbXa_sbVa_s;
@@ -895,3 +895,6 @@ nbs_PS = nbs(12);
 
 
 end
+
+%Beginning of Helper Functions
+%End of Helper Functions

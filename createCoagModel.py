@@ -82,8 +82,8 @@ if len(sys.argv) < 2:
         * MASS_ACTION: Default (if no type given)
         * FLOW:        species entering or exiting reaction zone.
         * LIPID:       Binding on/off lipid (competition)
-        * PLATELET:    Binding on/off platelet (no competition)
         * FUNCTION:    Concentration changing due to reaction zone
+        * [?not needed?] PLATELET:    Binding on/off platelet (no competition)
 
     Example Reactions:
         A + 2 * B -> C , k_1 #Forward
@@ -98,13 +98,17 @@ if len(sys.argv) < 2:
             L_TF + II <-> II_st, kon_ii, koff_ii, nbs_ii, LIPID
         - kon_ii units: 1/(concentration * time * binding sites)
 
+    Example Flow Reactions:
+          -> K, kflow, K_up, FLOW #Species Flowing In
+        K ->  , kflow, FLOW       #Flowing Flowing Out
+        
     Supported Features:
     -----------------------------------
       - Support for non-mass action lipid/platlet binding.
       - Outputs lipid/platlet binding sites as a separate parameter vector (nbs)
-      - Can handle only mass action terms.
+      - Can handle non-constant coefficients for platelet site activation.
       - Outputs Species and rates output in input order.
-      - Supports pure synthesis/degradation (e.g., "-> A", "B ->").
+      - Supports pure synthesis/degradation/in-out flow (e.g., "-> A", "B ->").
       - Consolidates duplicate kinetic rates.
       - Splits stoichiometric matrix for A + B -> A + C reactions.
       - Removes duplicate reactions (even one side of bidirectional ones).
@@ -125,13 +129,15 @@ if len(sys.argv) < 2:
     - Investigate prior use of "=" operator in reactions.
     - Improve MATLAB text wrapping for long lines.
     - Add back support for Python code.
+    - Consider Flow reactions of the form: C <-> C, kflow, C_up, FLOW
 
     Problems to Resolve:
     -----------------------------------
     - Check for valid reaction types (i.e., flow types must all have the same FLOW rate)
+        * Really there are 2 flow rates for biochemical species and platelets.
     
     Current Version:
-        Suzanne Sindi, 04/07/2025
+        Suzanne Sindi, 04/08/2025
 
     """))
     sys.exit("Usage: python3 createCoagModel.py StaticCoag.txt")
@@ -180,6 +186,27 @@ def unique_entries_in_order(lst):
     """Return only unique entries from a list, preserving their order."""
     seen = set()
     return [x for x in lst if not (x in seen or seen.add(x))]
+
+def create_reaction(reactants, reactant_coeffs, products, product_coeffs, names, values, reaction_type, reaction_modifiers, reverse=False):
+    if reverse:
+        reactants, products = products, reactants
+        reactant_coeffs, product_coeffs = product_coeffs, reactant_coeffs
+        name = names[1]
+        value = values[1]
+    else:
+        name = names[0]
+        value = values[0]
+    return Reaction(
+        equation = formatFwdReaction(reactants, reactant_coeffs, products, product_coeffs),
+        rateName = name,
+        rateValue = value,
+        reactants = reactants,
+        reactant_coeffs = reactant_coeffs,
+        products = products,
+        product_coeffs = product_coeffs,
+        reactionType = reaction_type,
+        reactionModifiers = reaction_modifiers
+    )
 
 def formatFwdReaction(reactants, reactant_coeffs, products, product_coeffs):
     # Join reactants with their coefficients
@@ -251,16 +278,20 @@ def parseReactions(reactions, plateletSites, verbose):
         reactionCount = len(rates);
 
         if reactionCount == 1:  # We add only 1 case, easy
+            parsed_reactions.append(create_reaction(reactants, reactantCoeffs, products, productCoeffs,names,values,reaction_type, reaction_modifiers) )
             # Create a Reaction object and add to the list
-            reaction_obj = Reaction(equation = formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs),rateName=names[0],rateValue=values[0],reactants=reactants,reactant_coeffs=reactantCoeffs,products=products, product_coeffs=productCoeffs, reactionType=reaction_type, reactionModifiers = reaction_modifiers)
-            parsed_reactions.append(reaction_obj)
+            #reaction_obj = Reaction(equation = formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs),rateName=names[0],rateValue=values[0],reactants=reactants,reactant_coeffs=reactantCoeffs,products=products, product_coeffs=productCoeffs, reactionType=reaction_type, reactionModifiers = reaction_modifiers)
+            #parsed_reactions.append(reaction_obj)
         
         elif reactionCount == 2:  # We add 2 objects for bi-directional reactions
-            reaction_fwd = Reaction( equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs), rateName=names[0], rateValue=values[0], reactants=reactants, reactant_coeffs=reactantCoeffs, products=products, product_coeffs=productCoeffs, reactionType=reaction_type,                 reactionModifiers=reaction_modifiers)
+            parsed_reactions.append(create_reaction(reactants, reactantCoeffs, products, productCoeffs,names,values,reaction_type, reaction_modifiers,reverse=False) )
+            parsed_reactions.append(create_reaction(reactants, reactantCoeffs, products, productCoeffs,names,values,reaction_type, reaction_modifiers,reverse=True) )
+
+            #reaction_fwd = Reaction( equation=formatFwdReaction(reactants, reactantCoeffs, products, productCoeffs), rateName=names[0], rateValue=values[0], reactants=reactants, reactant_coeffs=reactantCoeffs, products=products, product_coeffs=productCoeffs, reactionType=reaction_type,                 reactionModifiers=reaction_modifiers)
             
-            reaction_rev = Reaction( equation=formatFwdReaction(products, productCoeffs, reactants, reactantCoeffs), rateName=names[1], rateValue=values[1], reactants=products, reactant_coeffs=productCoeffs, products=reactants, product_coeffs=reactantCoeffs, reactionType=reaction_type, reactionModifiers=reaction_modifiers)
-            parsed_reactions.append(reaction_fwd)
-            parsed_reactions.append(reaction_rev)
+            #reaction_rev = Reaction( equation=formatFwdReaction(products, productCoeffs, reactants, reactantCoeffs), rateName=names[1], rateValue=values[1], reactants=products, reactant_coeffs=productCoeffs, products=reactants, product_coeffs=reactantCoeffs, reactionType=reaction_type, reactionModifiers=reaction_modifiers)
+            #parsed_reactions.append(reaction_fwd)
+            #parsed_reactions.append(reaction_rev)
         
         else:
             print(f"\tError: Invalid reaction count in: {reaction}")
@@ -304,7 +335,7 @@ def parse_biochemical_equation(line):
 
     return lhs, rhs, arrow, rates, other
 
-def parse_reaction_type(other, products, coefficients):
+def parse_reaction_type(other, reactants, products, coefficients):
     known_types = {"LIPID", "FLOW", "MASS_ACTION", "FUNCTION"}
     reactionModifiers = {}
 
@@ -325,11 +356,14 @@ def parse_reaction_type(other, products, coefficients):
         reactionModifiers["bindingSites"] = other[0]
     
     elif maybe_type == "FLOW":
-        if len(other) != 2:
-            print(f"Error: FLOW reactions must have exactly one modifier before the type — got {other[:-1]}")
+        if len(other) == 2 and len(reactants) == 0:  #In: ->K, kflow, Other={K_up, FLOW
+            reactionModifiers["upstream"] = other[0]
+        elif len(other) == 1 and len(reactants) == 1: #Out: K->, kflow, Other={FLOW}
+            reactionModifiers["downstream"] = "outflow"
+        else:
+            print(f"Error: FLOW reaction doesn't have expected in/out flow structure")
             return None, None
-        reactionModifiers["upstream"] = other[0]
-
+        
     elif maybe_type == "FUNCTION":
         if len(other) > 1:
             function_expr = ",".join(other[:-1])  # Join all but the last element
@@ -388,7 +422,7 @@ def parseEquation(equationString, plateletSites, verbose=False):
         return None, None, None, None, None, None, None
 
     #(2) Parse OTHER:
-    reactionType, reactionModifiers  = parse_reaction_type(other,plateletSiteProducts, plateletSiteProductCoeffs)
+    reactionType, reactionModifiers  = parse_reaction_type(other,reactants, plateletSiteProducts, plateletSiteProductCoeffs)
 
     if verbose:
         print(f"NEW reactantCoeffs: {reactantCoeffs}")
@@ -691,7 +725,7 @@ def parseInitialConditions(initialConditions, verbose=False):
     
     parsed_ICs = []
     seen_names = set()  # A set to track names that have been parsed
-    duplicates = []  # List to store any duplicates found
+    duplicates = []     # List to store any duplicates found
 
     for ic_str in initialConditions:
         ic_str = ic_str.strip()  # Remove leading/trailing spaces
@@ -1665,9 +1699,9 @@ appendToSpecialSpecies(specialSpecies,parsedLipidSpecies,"LIPID")
 appendToSpecialSpecies(specialSpecies,parsedPlateletSpecies,"PLATELET")
 appendToSpecialSpecies(specialSpecies,parsedPlateletSites,"PLATELET_SITE")
 
-###########################################
-# Step 2: Parse the Biochemical Reactions #
-###########################################
+#######################################################
+# Step 2: Parse and Error Check Biochemical Reactions #
+#######################################################
 
 # (2a) Do initial parsing of reactions
 parsed_reactions = parseReactions(biochemicalReactions, parsedPlateletSites, True)
@@ -1695,7 +1729,7 @@ flow         = []
 flowRate     = []
 functionArgs = []
 
-# Dictionary to track the flow reactions for each species
+# (2d) Dictionary to track the flow reactions for each species
 flow_species_count  = {}
 badFlowReactions    = []
 
@@ -1728,7 +1762,8 @@ for reaction in parsed_reactions:
         functionArgs.extend(reaction.reactionModifiers["args"])
 
     if(reaction.reactionType=="FLOW"):
-        flow.append(reaction.reactionModifiers["upstream"])
+        if "upstream" in reaction.reactionModifiers:
+            flow.append(reaction.reactionModifiers["upstream"])
         flowRate.append(reaction.rateName)
         if not (len(reaction.reactants) == 1 and len(reaction.products) == 0) and \
            not (len(reaction.reactants) == 0 and len(reaction.products) == 1):
@@ -1835,27 +1870,26 @@ if reaction_type_count["FLOW"] > 0:
 print(f"End: Consistency Checking Biochemical Reactions")
 print("-" * 50)
 
-#Things to check:
-# (1) If Cup = C_IN symbolically; we need to make sure that variable EXISTS!
+####################
+# Things to Modify #
+####################
+# (1) Error Check to Add: We allow upstream in values to be set to other parameters
+#     (Example: Cup = C_IN) symbolically. We do NOT check that this exists.
+#     Add check
 # (2) Pull all the in-line parameters from the equations (if the values do NOT equal to the numerical value)
-#(3) All specified parameters should occur somewhere! (Rxn rates, in a function).
-#(4) All function arguments should be
-#   - Specified Parameters    (go at the end of parameters list in p variable, real values) p[extra]
-#   - Unspecified Parameters  (go at the end of parameters list in p variable, default) p[extra]
-#   - Given kinetic rates     (already listed as a kinetic rate in another equation) use it's p[i]
-#   - One of the biochemical species unique_species (use it's y[i] value)
 #(6) Make it possible to be able to in-line declare a biochemical rate:
 #    - Check that any rate for a parameter is the same (error check)
-#DONE (5) Specified Parameters might be:
-#    - Arguments to functions (end of parameters)  <- p
-#    - NBS or Platelet binding rates               <- NBS
-#    - Flow rate (this is potentially special      <- Flow goes separate
-#(7) DONE: For kflow reactions; do we always want an in-and-out; then maybe make it 1 equation:
-#(8) DONE: All the FLOW reactions should have the same parameter (this is an error check)
-#(9) DONE: All Flow reactions should have either [1,0] or [0,1] species reactants; should check.
+#(3) All specified parameters should occur somewhere! (Rxn rates, in a function).
 
-#Allow this one too:
-# Perhaps Remake THE FLOW Equation Form:    C <-> C, kflow, C_up, FLOW
+########
+# DONE #
+########
+# (1) Funciton arguments can either be: previously defined parameter or NEW one
+#   - Added an extra set of parameters for ones NOT defined elsewhere. (Default Value = 1)
+# (2) For kflow reactions; fixed the reactions to have an in-out type.
+# (3) Error Check: All FLOW rxns should have the same parameter (could easily allow for 2)
+# (4) Error Check: All FLOW rxns should have either [1,0] or [0,1] species reactants
+
 
 ##########################################
 # Step 3: Create Stoichiometric Matrices #
@@ -1901,76 +1935,78 @@ print(f"Functions Defined: {functionsDefined}")
 
 create_matlab_multipleFileOutput(sys.argv[1], prefix, stoich, parsed_reactions, unique_species, rates, unique_rates, unique_nbs, unique_flow, unique_ftnArgs, parsed_ICs, parsedParameters, specialSpecies, parsedFunctions, verbose)
 
-######################################################
-# Step 5: Determine Conserved Quantities (If Needed) #
-######################################################
+print(f"FINISHED SUCCESSFULLY!")
 
-if determineConserved:
-    s_count = 0
-    st_count = 0
-    sn_count = 0;
-
-    sLipidSites  = "Ls_Sites = ";
-    stLipidSites = "Lst_Sites = ";
-    snLipidSites = "Sn_Sites = ";
-
-    #Goal:
-    # For each species bound to lipid; determine the number of bindings sites.
-    # The binding site sizes we have are given in this list:
-    # unique_nbs
-
-    for spec in unique_species:
-        #Determine which strings in this list we contain a match to;
-        #matches = [nbs for nbs in unique_nbs if nbs in spec]
-        #print(f"Species {spec} and matches = {matches}")
-
-        # Count occurrences of "_st" first
-        local_st_count = spec.count("_st")
-    
-        # Replace "_st" with a placeholder to avoid counting it as "_s"
-        temp_spec = spec.replace("_st", "")
-    
-        # Count occurrences of "_st" first
-        local_sn_count = temp_spec.count("_sn")
-    
-        # Replace "_sn" with a placeholder to avoid counting it as "_s"
-        temp_spec = temp_spec.replace("_sn", "")
-    
-        # Count occurrences of "_s" in the modified string
-        local_s_count = temp_spec.count("_s")
-    
-        if local_st_count > 0:
-            if local_st_count > 1:
-                stLipidSites += f"+ {local_st_count} * {transform_string(spec)} "
-            else:
-                stLipidSites += f"+ {transform_string(spec)} "
-        if local_sn_count > 0:
-            if local_sn_count > 1:
-                snLipidSites += f"+ {local_sn_count} * {transform_string(spec)} "
-            else:
-                snLipidSites += f"+ {transform_string(spec)} "
-        if local_s_count > 0:
-            if local_s_count > 1:
-                sLipidSites += f"+ {local_s_count} * {transform_string(spec)} "
-            else:
-                sLipidSites += f"+ {transform_string(spec)} "
-    
-        st_count += local_st_count
-        sn_count += local_sn_count
-        s_count += local_s_count
-        
-    
-        if verbose: print(f"{spec}\t{local_st_count}\t{local_sn_count}\t{local_s_count}")
-
-    if verbose:
-        print(f'The string "_s" occurs {s_count} times (excluding "_st" and "_sn").')
-        print(f'The string "_st" occurs {st_count} times.')
-        print(f'The string "_sn" occurs {sn_count} times.')
-
-
-        print(f'The total bound lipid: {stLipidSites}')
-        print(f'The total bound ubBoundlipid: {sLipidSites}')
-        print(f'The total bound Sn Sites: {snLipidSites}')
-
-
-
+#######################################################
+## Step 5: Determine Conserved Quantities (If Needed) #
+#######################################################
+#
+#if determineConserved:
+#    s_count = 0
+#    st_count = 0
+#    sn_count = 0;
+#
+#    sLipidSites  = "Ls_Sites = ";
+#    stLipidSites = "Lst_Sites = ";
+#    snLipidSites = "Sn_Sites = ";
+#
+#    #Goal:
+#    # For each species bound to lipid; determine the number of bindings sites.
+#    # The binding site sizes we have are given in this list:
+#    # unique_nbs
+#
+#    for spec in unique_species:
+#        #Determine which strings in this list we contain a match to;
+#        #matches = [nbs for nbs in unique_nbs if nbs in spec]
+#        #print(f"Species {spec} and matches = {matches}")
+#
+#        # Count occurrences of "_st" first
+#        local_st_count = spec.count("_st")
+#    
+#        # Replace "_st" with a placeholder to avoid counting it as "_s"
+#        temp_spec = spec.replace("_st", "")
+#    
+#        # Count occurrences of "_st" first
+#        local_sn_count = temp_spec.count("_sn")
+#    
+#        # Replace "_sn" with a placeholder to avoid counting it as "_s"
+#        temp_spec = temp_spec.replace("_sn", "")
+#    
+#        # Count occurrences of "_s" in the modified string
+#        local_s_count = temp_spec.count("_s")
+#    
+#        if local_st_count > 0:
+#            if local_st_count > 1:
+#                stLipidSites += f"+ {local_st_count} * {transform_string(spec)} "
+#            else:
+#                stLipidSites += f"+ {transform_string(spec)} "
+#        if local_sn_count > 0:
+#            if local_sn_count > 1:
+#                snLipidSites += f"+ {local_sn_count} * {transform_string(spec)} "
+#            else:
+#                snLipidSites += f"+ {transform_string(spec)} "
+#        if local_s_count > 0:
+#            if local_s_count > 1:
+#                sLipidSites += f"+ {local_s_count} * {transform_string(spec)} "
+#            else:
+#                sLipidSites += f"+ {transform_string(spec)} "
+#    
+#        st_count += local_st_count
+#        sn_count += local_sn_count
+#        s_count += local_s_count
+#        
+#    
+#        if verbose: print(f"{spec}\t{local_st_count}\t{local_sn_count}\t{local_s_count}")
+#
+#    if verbose:
+#        print(f'The string "_s" occurs {s_count} times (excluding "_st" and "_sn").')
+#        print(f'The string "_st" occurs {st_count} times.')
+#        print(f'The string "_sn" occurs {sn_count} times.')
+#
+#
+#        print(f'The total bound lipid: {stLipidSites}')
+#        print(f'The total bound ubBoundlipid: {sLipidSites}')
+#        print(f'The total bound Sn Sites: {snLipidSites}')
+#
+#
+#
