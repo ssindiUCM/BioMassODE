@@ -24,7 +24,8 @@ nbs = [ nbs_x, np_ii, np_v ];
 
 % Function Arguments 
 e2P = 1; 
+VolP = 1; 
 
-otherArgs = [ e2P ];
+otherArgs = [ e2P, VolP ];
 
 

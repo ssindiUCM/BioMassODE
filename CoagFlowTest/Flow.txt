@@ -14,7 +14,12 @@ np_ii   = 2
 
 #Function; needs to begin with FUNCTION we have arguments and body; 
 #          Each argument needs to be either a species or a parameter.
-FUNCTION A(x,e2P) = x/(e2P + x) #1 nM = 0.001 \mu M
+FUNCTION A(IIa,e2P) = IIa/(e2P + IIa) #1 nM = 0.001 \mu M
+
+#Function: Following the format for
+FUNCTION Dilution(VolP,PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P) = (VolP)/((1-VolP)*(PL_S + PL_V))*dPdt(PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P)
+
+FUNCTION dPdt(PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P) = +  k_pla_act * PL * PL_S  + k_pla_act * PL * PL_V  +  kact_e2 * A(IIa,e2P) * PL +  k_pla_plus * PL * P_SUB
 
 #Platelet Species
 PL   = PLATELET  #Platlet in Solution
@@ -24,6 +29,9 @@ PL_V = PLATELET  #Platelet in Volume
 #Platelet Site (The only species allowed non-constant reaction rates!)
 p2avail = PLATELET_SITE
 p5avail = PLATELET_SITE
+
+#Dilution (Change All the Variables in the Same Way)
+DILUTION = Dilution(VolP,PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P)
 
 #Lipid Reaction: Making sure this works
 L_TF + X <-> X_st, kon_x, koff_x, nbs_x, LIPID

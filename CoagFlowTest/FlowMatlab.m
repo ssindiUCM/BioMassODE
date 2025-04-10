@@ -92,6 +92,7 @@ np_v = nbs(3);
 
 % Rename Function Arguments Site 
 e2P = otherArgs(1);  
+VolP = otherArgs(2);  
 
 
 % Rename Flow Up 
@@ -103,43 +104,43 @@ PL_up = flowUp(3);
 % ODEs from reaction equations 
 
 % L_TF
- dy(1)  =  -  kon_x/nbs_x * L_TF * X  +  koff_x * X_st;
+ dy(1)  =  -  kon_x/nbs_x * L_TF * X  +  koff_x * X_st - L_TF * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % X
- dy(2)  =  -  kon_x/nbs_x * L_TF * X  +  koff_x * X_st;
+ dy(2)  =  -  kon_x/nbs_x * L_TF * X  +  koff_x * X_st - X * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % X_st
- dy(3)  =  +  kon_x/nbs_x * L_TF * X  -  koff_x * X_st;
+ dy(3)  =  +  kon_x/nbs_x * L_TF * X  -  koff_x * X_st - X_st * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % IIa
- dy(4)  =  -  kflow * IIa  +  kflow * IIa_up  -  kon_IIa_p * IIa * p2avail  +  koff_IIa_p * IIa_p;
+ dy(4)  =  -  kflow * IIa  +  kflow * IIa_up  -  kon_IIa_p * IIa * p2avail  +  koff_IIa_p * IIa_p - IIa * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % V
- dy(5)  =  -  kflow * V  +  kflow * V_up  -  kon_v_p * V * p5avail  +  koff_v_p * V_p;
+ dy(5)  =  -  kflow * V  +  kflow * V_up  -  kon_v_p * V * p5avail  +  koff_v_p * V_p - V * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % PL
- dy(6)  =  +  kflow * PL_up  -  kflow * PL  -  k_pla_plus * PL * P_SUB  -  k_pla_act * PL * PL_S  -  k_pla_act * PL * PL_V  -  kact_e2 * A(IIa,e2P) * PL;
+ dy(6)  =  +  kflow * PL_up  -  kflow * PL  -  k_pla_plus * PL * P_SUB  -  k_pla_act * PL * PL_S  -  k_pla_act * PL * PL_V  -  kact_e2 * A(IIa,e2P) * PL - PL * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % P_SUB
- dy(7)  =  -  k_pla_plus * PL * P_SUB  -  k_pla_plus * P_SUB * PL_V  +  k_pla_minus * PL_S;
+ dy(7)  =  -  k_pla_plus * PL * P_SUB  -  k_pla_plus * P_SUB * PL_V  +  k_pla_minus * PL_S - P_SUB * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % PL_S
- dy(8)  =  +  k_pla_plus * PL * P_SUB  +  k_pla_plus * P_SUB * PL_V  -  k_pla_minus * PL_S  +   0 ;
+ dy(8)  =  +  k_pla_plus * PL * P_SUB  +  k_pla_plus * P_SUB * PL_V  -  k_pla_minus * PL_S  +   0  - PL_S * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % p5avail
- dy(9)  =  +  k_pla_plus * np_v * PL * P_SUB  +  k_pla_act * np_v * PL * PL_S  +  k_pla_act * np_v * PL * PL_V  +  kact_e2 * A(IIa,e2P) * np_v * PL  -  kon_v_p * V * p5avail  +  koff_v_p * V_p;
+ dy(9)  =  +  k_pla_plus * np_v * PL * P_SUB  +  k_pla_act * np_v * PL * PL_S  +  k_pla_act * np_v * PL * PL_V  +  kact_e2 * A(IIa,e2P) * np_v * PL  -  kon_v_p * V * p5avail  +  koff_v_p * V_p - p5avail * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % p2avail
- dy(10)  =  +  k_pla_plus * np_ii * PL * P_SUB  +  k_pla_act * np_v * PL * PL_S  +  k_pla_act * np_v * PL * PL_V  +  kact_e2 * A(IIa,e2P) * np_ii * PL  -  kon_IIa_p * IIa * p2avail  +  koff_IIa_p * IIa_p;
+ dy(10)  =  +  k_pla_plus * np_ii * PL * P_SUB  +  k_pla_act * np_v * PL * PL_S  +  k_pla_act * np_v * PL * PL_V  +  kact_e2 * A(IIa,e2P) * np_ii * PL  -  kon_IIa_p * IIa * p2avail  +  koff_IIa_p * IIa_p - p2avail * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % PL_V
- dy(11)  =  -  k_pla_plus * P_SUB * PL_V  +  k_pla_minus * PL_S  +  k_pla_act * PL * PL_S  +  k_pla_act * PL * PL_V  +  kact_e2 * A(IIa,e2P) * PL;
+ dy(11)  =  -  k_pla_plus * P_SUB * PL_V  +  k_pla_minus * PL_S  +  k_pla_act * PL * PL_S  +  k_pla_act * PL * PL_V  +  kact_e2 * A(IIa,e2P) * PL - PL_V * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % IIa_p
- dy(12)  =  +  kon_IIa_p * IIa * p2avail  -  koff_IIa_p * IIa_p;
+ dy(12)  =  +  kon_IIa_p * IIa * p2avail  -  koff_IIa_p * IIa_p - IIa_p * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % V_p
- dy(13)  =  +  kon_v_p * V * p5avail  -  koff_v_p * V_p;
+ dy(13)  =  +  kon_v_p * V * p5avail  -  koff_v_p * V_p - V_p * Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 
 
@@ -148,11 +149,27 @@ PL_up = flowUp(3);
 end
 
 %Beginning of Helper Functions
-function output = A(x, e2P)
+function output = A(IIa, e2P)
     % Function: A
-    % Arguments: x, e2P
-    % Body: x/(e2P + x)
-    output = x/(e2P + x);
+    % Arguments: IIa, e2P
+    % Body: IIa/(e2P + IIa)
+    output = IIa/(e2P + IIa);
+end
+
+
+function output = Dilution(VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P)
+    % Function: Dilution
+    % Arguments: VolP, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P
+    % Body: (VolP)/((1-VolP)*(PL_S + PL_V))*dPdt(PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P)
+    output = (VolP)/((1-VolP)*(PL_S + PL_V))*dPdt(PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P);
+end
+
+
+function output = dPdt(PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P)
+    % Function: dPdt
+    % Arguments: PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P
+    % Body: +  k_pla_act * PL * PL_S  + k_pla_act * PL * PL_V  +  kact_e2 * A(IIa,e2P) * PL +  k_pla_plus * PL * P_SUB
+    output = +  k_pla_act * PL * PL_S  + k_pla_act * PL * PL_V  +  kact_e2 * A(IIa,e2P) * PL +  k_pla_plus * PL * P_SUB;
 end
 
 
