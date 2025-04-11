@@ -55,11 +55,11 @@ if len(sys.argv) < 2:
                 PL_up   = 1.0    #Set to be a random value.
         * Special classes of species: LIPID, PLATELET, PLATELET_SITE
             Ex:
-                PL      = PLATELET  #Platlet in Solution
-                PL_S    = PLATELET  #Platelet in Subendothelium
-                PL_V    = PLATELET  #Platelet in Volume
-                p2avail = PLATELET_SITE
-                p5avail = PLATELET_SITE
+                PL      = PLATELET          #Platlet in Solution
+                PL_S    = PROCOAG_PLATELET  #Platelet in Subendothelium
+                PL_V    = PROCOAG_PLATELET  #Platelet in Volume
+                p2      = PLATELET_SITE
+                p5      = PLATELET_SITE
                 
     ---------------
     (2) Functions:
@@ -130,6 +130,7 @@ if len(sys.argv) < 2:
 
     In-Progress Features (Still Working On):
     -----------------------------------
+      - Platelets go first (PLATELETS, PROCOAG_PLATELET are first in species list)
       - Parameter values set set by constants.
       - Support for inline kinetic rate values:
         Example:
@@ -147,9 +148,11 @@ if len(sys.argv) < 2:
     - Check for valid reaction types (i.e., flow types must all have the same FLOW rate)
         * Really there are 2 flow rates for biochemical species and platelets.
     - Add support for dummy variables in the function declaration.
-    
+    - Potential Error: We use Transformed strings (X:V to XbV) but we might not have done this in the arguments for a function. This needs checking.
+        * Solution: For each function argument figure out if it's a species or something else.
+        
     Current Version:
-        Suzanne Sindi, 04/09/2025
+        Suzanne Sindi, 04/11/2025
 
     """))
     sys.exit("Usage: python3 createCoagModel.py StaticCoag.txt")
@@ -157,6 +160,29 @@ if len(sys.argv) < 2:
 ########################
 # Supporting Functions #
 ########################
+def getSubset(species_dict, *types):
+    """
+    Returns a subset of species from species_dict that match one or more specified types.
+    
+    Parameters:
+    - species_dict: The dictionary of species (e.g., specialSpecies).
+    - *types: One or more species types to filter by.
+    
+    Returns:
+    - A dictionary containing species matching the specified types.
+    """
+    # Ensure types is a tuple, even if only one type is passed
+    types_set = set(types)
+
+    # Filter the species_dict for entries matching the specified types
+    subset = {
+        name: info
+        for name, info in species_dict.items()
+        if info["type"] in types_set
+    }
+
+    return subset
+
 
 def appendToSpecialSpecies(special_species_dict, species_list, species_type):
     for species in species_list:
@@ -522,19 +548,18 @@ def extract_coefficients(terms, plateletSites, side=None):
 def parseInputFile(verbose=False):
     # Initialize biochemical arrays and counters
     biochemicalReactions = []
-    initialConditions = []    # User-specified initial conditions
-    lipidSpecies = []         # Lipids must be handled differently
-    plateletSpecies = []      # Platelets must be handled differently
-    plateletSites = []        # Platelet Sites (not the species)
-    parameterCondition = []   # User-specified parameters (not in-line)
-    functionCondition = []    # Dilution and platelet activation
-    dilutionCondition = []    # Where we store dilution function
+    initialConditions = []      # User-specified initial conditions
+    specialSpecies = []         # Special Species: Lipid, Platelet, Sites, Stores
+    parameterCondition = []     # User-specified parameters (not in-line)
+    functionCondition = []      # Dilution and platelet activation
+    dilutionCondition = []      # Where we store dilution function
 
     numReactionsReadIn = 0
     numInitialConditionsReadIn = 0
     numLipidSpecies = 0
     numPlateletSpecies = 0
     numPlateletSites = 0
+    numPlateletStores = 0
     numParametersReadIn = 0
     numFunctionsDefined = 0
     numDilutionCondition = 0;
@@ -560,53 +585,56 @@ def parseInputFile(verbose=False):
                 # Split the line by commas
                 fields = line.split(',')
                 
-                if len(fields) > 1 and not line.lstrip().startswith(("FUNCTION", "DILUTION")):
+                ##(Q) Is this a special species?
+                if "= LIPID" in line:
+                    specialSpecies.append({"type": "LIPID", "line": line.replace("= LIPID", "").strip()})
+                    numLipidSpecies += 1
+                    if verbose: print(f"\t\tLipid Species: {line}")
+                elif "= PLATELET_SITE" in line:
+                    specialSpecies.append({"type": "PLATELET_SITE", "line": line.replace("= PLATELET_SITE", "").strip()})
+                    numPlateletSites += 1
+                    if verbose: print(f"\t\tPlatelet Site: {line}")
+                elif "= PLATELET_STORE" in line:
+                    specialSpecies.append({"type": "PLATELET_STORE", "line": line.replace("= PLATELET_STORE", "").strip()})
+                    numPlateletStores += 1
+                    if verbose: print(f"\t\tPlatelet Store: {line}")
+                elif "= PLATELET" in line:
+                    specialSpecies.append({"type": "PLATELET", "line": line.replace("= PLATELET", "").strip()})
+                    numPlateletSpecies += 1
+                    if verbose: print(f"\t\tPlatelet Species: {line}")
+                elif "= PROCOAG_PLATELET" in line:
+                    specialSpecies.append({"type": "PROCOAG_PLATELET", "line": line.replace("= PROCOAG_PLATELET", "").strip()})
+                    numPlateletSpecies += 1
+                    if verbose: print(f"\t\tPlatelet Species: {line}")
+
+                #(Q2): Do we start with function? Then it's a function!
+                elif line.lstrip().startswith("FUNCTION"):
+                    functionCondition.append(line)
+                    numFunctionsDefined += 1
+                    if verbose: print(f"\t\tFunctions: {line}")
+
+                #(Q3): Do we start with DIULTION? Then DILUTION = True and we go!
+                elif line.lstrip().startswith("DILUTION"):
+                    DILUTION = True;
+                    dilutionCondition.append(line)
+                    if verbose: print(f"\t\tDilution is True: {line}")
+            
+                #(Q4): Is this an intial condition?
+                elif "_IC" in line.split('=')[0].strip():  # Check if it's an initial condition
+                    initialConditions.append(line)
+                    numInitialConditionsReadIn += 1
+                    if verbose: print(f"\t\tInitial Condition: {line}")
+                
+                #(Q5): Does it contain a comma? Then Try for biochemical equation
+                elif len(fields) > 1:
                     biochemicalReactions.append(line)
                     numReactionsReadIn += 1
                     if verbose: print(f"\t\tBiochemical Equation: {line}")
                 else:
-                    # Process single-field lines
-                    if "= LIPID" in line:
-                        lipidSpecies.append(line)
-                        numLipidSpecies += 1
-                        if verbose: print(f"\t\tLipid Species: {line}")
-
-                    # Check for platelet sites before checking for platelet species
-                    elif "= PLATELET_SITE" in line:
-                        plateletSites.append(line)
-                        numPlateletSites += 1
-                        if verbose:
-                            print(f"\t\tPlatelet Sites: {line}")
-
-                    elif "= PLATELET" in line:
-                        plateletSpecies.append(line)
-                        numPlateletSpecies += 1
-                        if verbose: print(f"\t\tPlatelet Species: {line}")
-
-                    elif "_IC" in line.split('=')[0].strip():  # Check if it's an initial condition
-                        initialConditions.append(line)
-                        numInitialConditionsReadIn += 1
-                        if verbose: print(f"\t\tInitial Condition: {line}")
-                    
-                    # Do we start with function? Then it's a function!
-                    elif line.lstrip().startswith("FUNCTION"):
-                        functionCondition.append(line)
-                        numFunctionsDefined += 1
-                        if verbose:
-                            print(f"\t\tFunctions: {line}")
-
-                    # Do we start with function? Then DILUTION = True and we go!
-                    elif line.lstrip().startswith("DILUTION"):
-                        DILUTION = True;
-                        dilutionCondition.append(line)
-                        if verbose:
-                            print(f"\t\tDilution is True: {line}")
-
-                    else:
-                        # Assume it's a parameter if it's neither a species nor an initial condition
-                        parameterCondition.append(line)
-                        numParametersReadIn += 1
-                        if verbose: print(f"\t\tParameter: {line}")
+                   # Assume it's a parameter if it's neither a species nor an initial condition
+                    parameterCondition.append(line)
+                    numParametersReadIn += 1
+                    if verbose: print(f"\t\tParameter: {line}")
 
     except IOError:
         sys.exit(f"Couldn't open {sys.argv[1]}")
@@ -620,11 +648,13 @@ def parseInputFile(verbose=False):
         headers = ["Category", "Count"]
         data = [
             ("Biochemical Reactions", numReactionsReadIn),
-            ("Specified Initial Conditions", numInitialConditionsReadIn),
-            ("Specified Lipid Species", numLipidSpecies),
-            ("Specified Platelet Species", numPlateletSpecies),
-            ("Specified Parameters", numParametersReadIn),
-            ("Functions Specified", numFunctionsDefined),
+            ("Initial Conditions", numInitialConditionsReadIn),
+            ("Lipid Species", numLipidSpecies),
+            ("Platelet Binding Sites",numPlateletSites),
+            ("Platelet Stores", numPlateletStores),
+            ("Platelet Species", numPlateletSpecies),
+            ("Parameters", numParametersReadIn),
+            ("Functions", numFunctionsDefined),
             ("Dilution Status", DILUTION )
         ]
 
@@ -647,9 +677,7 @@ def parseInputFile(verbose=False):
     return {
         "biochemicalReactions": biochemicalReactions,
         "initialConditions": initialConditions,
-        "lipidSpecies": lipidSpecies,
-        "plateletSpecies": plateletSpecies,
-        "plateletSites": plateletSites,
+        "specialSpecies": specialSpecies,
         "parameterCondition": parameterCondition,
         "functionCondition": functionCondition,
         "DILUTION" : DILUTION,
@@ -666,77 +694,69 @@ def parseInputFile(verbose=False):
     }
 
 
-def parseList(lines, mode=None, verbose=False):
-    unique_items = set()  # Track unique items for quick lookup
-    ordered_list = []  # Preserve insertion order
+def parseSpecies(lines, verbose=False):
+    allowed_types = { "PLATELET", "PROCOAG_PLATELET", "LIPID",
+        "PLATELET_SITE", "PLATELET_STORE"}
 
-    step_details = {
-        "LIPID": {
-            "header": "Step 1(b): Parse Specified Lipid Species",
-            "done": "DONE: 1(b): Parse Specified Lipid Species",
-            "header_display": "Step 1(b): Specified Lipid Species"
-        },
-        "PLATELET": {
-            "header": "Step 1(c): Parse Specified Platelet Species",
-            "done": "DONE: 1(c): Parse Specified Platelet Species",
-            "header_display": "Step 1(c): Specified Platelet Species"
-        },
-        "PLATELET_SITE": {
-            "header": "Step 1(d): Parse Specified Platelet Binding Sites",
-            "done": "DONE: 1(d): Parse Specified Platelet Binding Sites",
-            "header_display": "Step 1(d): Specified Platelet Binding Sites"
+    species_dict = {}
+    error_flag = False
+
+    for entry in lines:
+        species_type = entry.get('type')
+        line = entry.get('line', '').strip()
+
+        if species_type not in allowed_types:
+            print(f"Error: Invalid species type '{species_type}' in entry: {entry}")
+            error_flag = True
+            continue
+
+        parts = [p.strip() for p in line.split(',')]
+
+        if not parts or not parts[0]:
+            print(f"Error: Empty or invalid species name in entry: {entry}")
+            error_flag = True
+            continue
+
+        name = parts[0]
+        modifier = parts[1] if len(parts) > 1 else ""
+
+        if name in species_dict:
+            print(f"Error: Duplicate species name '{name}' detected.")
+            error_flag = True
+            continue
+
+        if species_type in {"PLATELET_STORE", "PLATELET_SITE"} and modifier == "":
+            print(f"Error: Species '{name}' of type '{species_type}' must have a modifier.")
+            error_flag = True
+            continue
+
+        species_dict[name] = {
+            "type": species_type,
+            "modifier": modifier
         }
-        
-    }
 
-    if verbose and mode in step_details:
-        print("-" * 50)
-        print(step_details[mode]["header"])
-
-    for line in lines:
-        line = line.strip()
-
-        # Determine parsing behavior based on mode
-        if mode in ["LIPID", "PLATELET","PLATELET_SITE"]:
-            keyword = f"= {mode}"
-            if keyword in line:
-                item_name = line.split('=')[0].strip()  # Get the part before `=`
-            else:
-                return f"⚠️ Error: Expected '{keyword}' but not found in '{line}'."
-        else:
-            item_name = line  # Treat as a direct list of items
-
-        # Ensure valid name (cannot start with a number)
-        if re.match(r"^[^\d].*", item_name):
-            if item_name not in unique_items:  # Only add if unique
-                unique_items.add(item_name)
-                ordered_list.append(item_name)
-                if verbose:
-                    print(f"\t✔ Added: {item_name}")
-        else:
-            print(f"\t⚠️ Error: Invalid name '{item_name}' (cannot start with a number).")
-
+    # Verbose: Print nicely formatted table
     if verbose:
-        print(f"\t✅ Total Unique Items: {len(ordered_list)}")
-        print(f"\t🔹 Unique List (Order Preserved): {ordered_list}")
-
-    if verbose and mode in step_details:
-        print(step_details[mode]["done"])
-        print("-" * 50)
-    
-        print(f"\n{'=' * 50}")
-        print(f"{step_details[mode]['header_display']:^30}")
         print(f"{'=' * 50}")
-        print(f"{ordered_list}")
-        print(f"{'=' * 50}\n")
-
-    return ordered_list
-    
-def parseInitialConditions(initialConditions, verbose=False):
-
-    if verbose:
+        print(f"{'Step 1(b): Special Species':^30}")
+        print(f"{'=' * 50}")
+        print(f"{'Name':<12}| {'Type':<20} | Modifier")
         print("-" * 50)
-        print(f"Step 1(a): Parse Intial Conditions")
+
+        # Sort by type, then by name
+        sorted_items = sorted(species_dict.items(), key=lambda x: (x[1]["type"], x[0]))
+
+        for name, info in sorted_items:
+            type_str = info["type"]
+            mod_str = info["modifier"] if info["modifier"] else "[None]"
+            print(f"{name:<12}| {type_str:<20} | {mod_str}")
+
+        print("=" * 50)
+
+    return species_dict, error_flag
+
+
+def parseInitialConditions(initialConditions, verbose=False):
     
     parsed_ICs = []
     seen_names = set()  # A set to track names that have been parsed
@@ -801,9 +821,7 @@ def parseInitialConditions(initialConditions, verbose=False):
 
 
     if verbose:
-        print(f"DONE: Step 1(a): Parse Initial Conditions")
-        print('-' * 50)
-
+        
         # Define headers for the initial conditions table
         ic_headers = ["Initial Condition Name", "Value"]
     
@@ -811,8 +829,8 @@ def parseInitialConditions(initialConditions, verbose=False):
         ic_data = [(ic.name, ic.value) for ic in parsed_ICs]  # Assuming parsed_ICs is a list of InitialCondition objects
 
         # Print table header for initial conditions
-        print(f"\n{'=' * 50}")
-        print(f"{'Step 1(a): Parse Intial Conditions':^30}")
+        print(f"{'=' * 50}")
+        print(f"Step 1(a): Specified Intial Conditions")
         print(f"{'=' * 50}")
         print(f"{ic_headers[0]:<30} | {ic_headers[1]:>10}")
         print("-" * 50)
@@ -833,9 +851,9 @@ def parseFunction(functionsDefined,verbose=False):
         rf"^{keyword}\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)\s*=\s*(.+)$"
     )
 
-    if verbose:
-        print('-' * 50)
-        print(f"Step 1(e): Parse Specified Functions")
+    #if verbose:
+        #print('-' * 50)
+        #print(f"Step 1(e): Parse Specified Functions")
 
     for func in functionsDefined:
         match = function_pattern.match(func.strip())
@@ -870,20 +888,20 @@ def parseFunction(functionsDefined,verbose=False):
         # Store valid function details
         parsed_functions.append({"name": name, "args": args_list, "body": body})
 
-        if verbose:
-            print(f"\tValid function parsed: {name}({', '.join(args_list)}) = {body}")
+        #if verbose:
+            #print(f"\tValid function parsed: {name}({', '.join(args_list)}) = {body}")
 
     if verbose:
         # Create a data list for parsed initial conditions
         print(f"\n{'=' * 50}")
-        print(f"{'Step 1(e): Parse Function Conditions':^30}")
+        print(f"Step 1(c): Parsed Functions")
         print(f"{'=' * 50}")
         for fVal in parsed_functions:  # Assuming parsed_ICs is a list of InitialCondition objects
             # Print table header for initial conditions
             print(f"{fVal}")
         
-        print(f"DONE: Step 1(e): Parse Specified Functions")
-        print('-' * 50)
+        #print(f"DONE: Step 1(e): Parse Specified Functions")
+        #print('-' * 50)
 
     return parsed_functions
     
@@ -897,9 +915,9 @@ def parseDilution(dilutionCondition,verbose=False):
         r"^\s*DILUTION\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)\s*$"
     )
     
-    if verbose:
-        print('-' * 50)
-        print(f"Step 1(g): Parse Specified Functions")
+    #if verbose:
+    #    print('-' * 50)
+    #    print(f"Step 1(g): Parse Specified Functions")
 
     for func in dilutionCondition:
         match = dilution_pattern.match(func.strip())
@@ -927,23 +945,23 @@ def parseDilution(dilutionCondition,verbose=False):
         # Store valid function details
         parsed_dilution.append({"name": name, "args": args_list})
 
-        if verbose:
-            print(f"\tValid Dilution function parsed: {name}({', '.join(args_list)})")
+        #if verbose:
+        #    print(f"\tValid Dilution function parsed: {name}({', '.join(args_list)})")
             
     if len(parsed_dilution)>1:
         print(f"Warning: More than 1 diultion function given. Will only use the first.")
 
     if verbose:
         # Create a data list for parsed initial conditions
-        print(f"\n{'=' * 50}")
-        print(f"{'Step 1(g): Parse Dilution Function':^30}")
+        print(f"{'=' * 50}")
+        print(f"Step 1(g): Dilution Function")
         print(f"{'=' * 50}")
         for fVal in parsed_dilution:  # Assuming parsed_ICs is a list of InitialCondition objects
             # Print table header for initial conditions
             print(f"{fVal}")
         
-        print(f"DONE: Step 1(g): Parse Dilution Function")
-        print('-' * 50)
+        #print(f"DONE: Step 1(g): Parse Dilution Function")
+        #print('-' * 50)
 
     return parsed_dilution
 
@@ -1545,6 +1563,451 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
         first_func = dilution_list[0]  # Access the first element
         dil_string = f"{first_func['name']}({', '.join(first_func['args'])})"
     
+    for i in range(Ns): #For each Species (NOT Platelet Sites)
+        speciesName = species[i]
+        species_info = specialSpecies.get(speciesName, {})
+        species_type = species_info.get("type")
+        
+        isLipidSpecies = species_type == "LIPID"
+        isPlateletSite = species_type == "PLATELET_SITE"
+        isPlateletStore = species_type == "PLATELET_STORE"
+        if(isPlateletSite or isPlateletStore):
+            continue
+        #isLipidSpecies = "L_noTF" in speciesName or "L_TF" in speciesName
+        isOnEmptyLipid = "_s" in speciesName and (not "_st" in speciesName) and (not "_sn" in speciesName)
+        isOnTFLipid    = "_st" in speciesName
+        isOnSilica     = "_sn" in speciesName
+        f.write("% ")
+        f.write(str(transform_string(species[i])))
+        f.write(f"\n d{transform_string(species[i])} = ")
+        #f.write("\n dy(")  ###<---- d"species[i]" =
+        #f.write(str(i+1))
+        #f.write(")  =")
+        for j in range(Nr): #For Each Reaction Rate....
+            isLipidReaction    = (parsed_reactions[j].reactionType=="LIPID")
+            isFlowReaction     = (parsed_reactions[j].reactionType=="FLOW")
+            isFunctionReaction = (parsed_reactions[j].reactionType=="FUNCTION")
+            
+            #################
+            # Case 1: Reaction j DECREASES the amount of species i;
+            #################
+            if (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) < 0):
+                ##################
+                #Part 1: Sign, Rate Constant & Stochiometric Change
+                ##################
+                f.write("  -  ")
+                if abs(int(s.stoich[i][j]))>1:
+                    f.write(str(abs(int(s.stoich[i][j])))) #Species i change;
+                    f.write(" * ")
+                f.write(str(rates[j])) #Reaction Rate
+                
+                ##################
+                #Part 2: Modifying the Reaction Rate if Needed for Each Type
+                ##################
+                #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
+                #if isLipidReaction: #This must be a koff
+                # V_s -> V + L; L is correct
+                # (V_s)_dt = -rate
+                # (V)_dt   = +rate
+                # L_dt     = +rate*nbs
+                if isLipidReaction and not (isLipidSpecies or isOnEmptyLipid or isOnTFLipid): #V_s
+                    f.write("/")
+                    f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
+                 
+                if isFunctionReaction:
+                    f.write(" * ")
+                    f.write(parsed_reactions[j].reactionModifiers["function"])
+                
+                ##################
+                #Part 3: Calculate the forward rate from reactant concentration
+                ##################
+                for k in range(Ns): #Species k
+                    if (not math.isnan(s.reactants[k][j])) and (int(s.reactants[k][j]) <= 0):
+                        f.write(" * ")
+                        f.write(transform_string(species[k]))
+                        if (abs(int(s.reactants[k][j])) != 1) and (s.reactants[k][j] != 0):
+                            f.write("^")
+                            f.write(str(abs(int(s.reactants[k][j]))))
+
+            #################
+            # Case 2: Reaction j INCREASES the amount of species i;
+            #################
+            elif (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) > 0):
+                ##################
+                #Part 1: Sign, Rate Constant & Stochiometric Change
+                ##################
+                f.write("  +  ")
+                if abs(int(s.stoich[i][j]))>1:
+                    f.write(str(abs(int(s.stoich[i][j])))) #Species i change;
+                    f.write(" * ")
+                f.write(str(rates[j])) #Biochemical Reaction Rate
+                
+                ##################
+                #Part 2: Modifying the Reaction Rate if Needed for Each Type
+                ##################
+                #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
+                if isLipidSpecies: #This must be a koff
+                    f.write("*")
+                    f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
+                    
+                if isLipidReaction and ( not isLipidSpecies ) and (isOnEmptyLipid or isOnTFLipid): #V_s
+                    f.write("/")
+                    f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
+                    
+                if isFlowReaction:
+                    f.write(" * ")
+                    f.write(parsed_reactions[j].reactionModifiers["upstream"])
+
+                if isFunctionReaction:
+                    f.write(" * ")
+                    f.write(parsed_reactions[j].reactionModifiers["function"])
+
+                if isPlateletSite and speciesName in parsed_reactions[j].reactionModifiers:
+                    #print(f"We are processing a species {speciesName} for a reaction {parsed_reactions[j]}")
+                    value = parsed_reactions[j].reactionModifiers[speciesName]
+                    if value:  # make sure it's not empty/None
+                        f.write(" * ")
+                        f.write(value)
+
+                ##################
+                #Part 3: Calculate the forward rate from reactant concentration
+                ##################
+                for k in range(Ns):
+                    ##Double check that this makes sense; perhaps should be reactants.
+                    if (not math.isnan(s.reactants[k][j])) and (int(s.reactants[k][j]) <= 0):
+                        f.write(" * ")
+                        f.write(transform_string(species[k]))
+                        if (abs(int(s.reactants[k][j])) != 1) and (s.reactants[k][j] != 0):
+                            f.write("^")
+                            f.write(str(abs(int(s.reactants[k][j]))))
+            
+            #################
+            # Case 3: Reaction j DEPENDS on Species i; but doesn't change it's concentration
+            #################
+            elif (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) == 0):
+                f.write("  +  ")
+                f.write(" 0 ")
+                
+        #####################
+        # Consider Dilution #
+        #####################
+        if DILUTION:
+            f.write(" - ")
+            f.write(transform_string(species[i]))
+            f.write(" * ")
+            f.write(dil_string)
+        
+        if verbose: print(f"\t\tSpecies {species[i]} ODE Complete")
+        f.write(";\n\n")
+
+    ###
+    # Now let's do the platelet_site and platelet_store variables.
+    for i in range(Ns):
+        speciesName = species[i]
+        species_info = specialSpecies.get(speciesName, {})
+        species_type = species_info.get("type")
+        
+        isPlateletSite = species_type == "PLATELET_SITE"
+        isPlateletStore = species_type == "PLATELET_STORE"
+        if not ( isPlateletSite or isPlateletStore ):
+            continue
+        
+        f.write("% ")
+        f.write(str(transform_string(species[i])))
+        f.write(f"\n d{transform_string(species[i])} = ")
+
+        for j in range(Ns):
+            speciesName = species[j]
+            species_info = specialSpecies.get(speciesName, {})
+            species_type = species_info.get("type")
+            if species_type == "PROCOAG_PLATELET":
+                f.write(f" + d{transform_string(species[j])} ")
+        
+        if DILUTION:
+            f.write(" - ")
+            f.write(transform_string(species[i]))
+            f.write(" * ")
+            f.write(dil_string)
+        
+        f.write(";\n\n")
+
+
+    
+    f.write(f" dy = [ d{transform_string(species[0])}")
+    for i in range(1,Ns):
+        f.write(f", d{transform_string(species[i])}")
+    f.write(" ]';\n\n\n")
+    
+    f.write("end")  ###END RHS
+    f.write("\n\n")
+
+    ##Output Helper Functions:
+    f.write("%Beginning of Helper Functions\n")
+
+    for function_dict in function_dicts:
+        # Generate the MATLAB code from the function dictionary
+        matlab_code = create_matlab_function(function_dict)
+    
+        # Write the generated function code to the file
+        f.write(matlab_code)
+        f.write("\n\n")  # Add some spacing between functions if desired
+
+    f.write("%End of Helper Functions\n")
+    
+    if verbose:
+        print(f"DONE! Successfully created Matlab Files")
+        print('-' * 50)
+    
+def create_matlab_multipleFileOutputOLD(input_file: str, outputPrefix: str,s: Stoich, parsed_reactions: list, species: list, rates: list, uniqueRates: list, uniqueNBS: list, uniqueFlow: list, uniqueftnArgs: list, parsed_ICs: list, parsed_params: list, specialSpecies: list, function_dicts: list, dilution = False, dilution_list = [], verbose: bool = False):
+    
+    if verbose:
+        print('-' * 50)
+        print(f"Step 3: Creating Matlab Output Files")
+    
+    Ns = len(s.species)
+    Nr = len(s.rates)
+    
+    NumReactions = len(parsed_reactions)
+    if( not NumReactions == Nr):
+        print(f"Error in Creating Matlab File: Total Rates do not Match Reactions.\n")
+        exit(-1);
+
+    #species = [i.name for i in s.species.keys()]
+    #rates = [i for i in s.rates.keys()]
+    #if v: print('\nOutput File: \n', output_file)
+    #if v: print("\n")
+        
+    matlabFilePrefix = outputPrefix + "Matlab"
+    ICFilePrefix     = outputPrefix + "IC"
+    ParamPrefix      = outputPrefix + "Params"
+    RenamePrefix     = outputPrefix + "Rename"
+    
+    fIC     = open(ICFilePrefix + ".m", 'w')
+    fParam  = open(ParamPrefix + ".m", 'w')
+    fRename = open(RenamePrefix + ".m", 'w')
+    f       = open(matlabFilePrefix + ".m", 'w')
+
+    #if v: print('\nOutput File: \n', output_file)
+    #if v: print("\n")
+
+    f.write("function [time,y] = ")
+    f.write(matlabFilePrefix)
+    f.write("(t_start,t_final)\n")
+    f.write("% Solves a system of ODEs from t=t_start to t=t_final \n")
+    f.write("% If no start time is given, then t_start = 0 \n")
+    f.write("% If no start or final time is given, then t_start = 0, t_final = 30*60 \n")
+    f.write("%\n")
+    f.write("%\n")
+    f.write("% This file was created by issuing command: \n")
+    f.write("%     python createMatlabFile.py ")
+    f.write(input_file)
+    f.write("\n")
+    f.write("%\n")
+    f.write("\n")
+    #f.write("\nif nargin == 1\n")
+    #f.write("     t_start = 0;  % Default start time is 0 \n")
+    f.write("if nargin == 0\n")
+    f.write("     t_start = 0;     % Default start time is 0\n")
+    f.write("     t_final = 30*60; % Default final time is 30*60\n")
+    f.write("elseif nargin~=2\n")
+    f.write("   disp('Need to Specify t_start, t_end')\n")
+    f.write("   return\n")
+    f.write("end\n\n\n")
+
+    fParam.write("% Kinetic Parameters \n")
+    for i in range(len(uniqueRates)):
+        fParam.write(uniqueRates[i])
+        fParam.write(" = 1; \n")                            #<- Should be able to set initial parameter
+
+    fParam.write("\np = [ ")
+    fParam.write(uniqueRates[0])
+    for i in range(1, len(uniqueRates)):
+        fParam.write(", ")
+        fParam.write(uniqueRates[i])
+    fParam.write(" ];\n\n\n")
+    
+    if len(uniqueNBS) >=1:
+        fParam.write("% Binding Site Parameters \n")
+        for i in range(len(uniqueNBS)):
+            fParam.write(uniqueNBS[i])
+            fParam.write(" = 1; \n")                          #<- Should be able to set initial parameter
+        
+        fParam.write("\n")
+        fParam.write("nbs = [ ")
+        fParam.write(uniqueNBS[0])
+        for i in range(1, len(uniqueNBS)):
+            fParam.write(", ")
+            fParam.write(uniqueNBS[i])
+        fParam.write(" ];\n\n\n")
+
+    if len(uniqueftnArgs) >=1:
+        fParam.write("% Function Arguments \n")
+        for i in range(len(uniqueftnArgs)):
+            fParam.write(uniqueftnArgs[i])
+            fParam.write(" = 1; \n")                          #<- Should be able to set initial parameter
+        
+        fParam.write("\n")
+        fParam.write("otherArgs = [ ")
+        fParam.write(uniqueftnArgs[0])
+        for i in range(1, len(uniqueftnArgs)):
+            fParam.write(", ")
+            fParam.write(uniqueftnArgs[i])
+        fParam.write(" ];\n\n\n")
+
+    f.write("% Set the Kinetic Parameters\n")
+    f.write(f"{ParamPrefix}\n\n")
+
+    ########################################################################################
+    # Set Initial Conditions and Upstream Flow Values: Default value of 0 if not specified #
+    ########################################################################################
+    
+    ic_dict = {ic.name: ic.value for ic in parsed_ICs}                # Convert IC to dict
+    param_dict = {param.name: param.value for param in parsed_params} #Convert Params to dict
+
+    fIC.write("% Initial Conditions \n")
+    for i in range(Ns):
+        #fIC.write(transform_string(species[i]))
+        #fIC.write("_IC")
+        #fIC.write(" = 0; \n")
+        species_name = transform_string(species[i]) + "_IC"
+        value = ic_dict.get(species_name, 0)  # Default to 0 if not explicitly provided
+        fIC.write(f"{species_name} = {value}; \n")
+
+    ##Line that's too long;
+    fIC.write("\ninit_cond = [ ")
+    fIC.write(transform_string(species[0]))
+    fIC.write("_IC")
+    for i in range(1,Ns):
+        fIC.write(", ")
+        fIC.write(transform_string(species[i]))
+        fIC.write("_IC")
+    fIC.write(" ];\n\n\n")
+    
+    if len(uniqueFlow) >= 1:
+        fIC.write("% Flow Rate Parameters \n")
+        for name in uniqueFlow:
+            value = param_dict.get(name, 1)     # Get value if exists, otherwise default to 1
+            fIC.write(f"{name} = {value}; \n")  # Use the actual value if available
+
+        fIC.write("\n")
+        
+        fIC.write("flowUp = [ ")
+        fIC.write(uniqueFlow[0])
+        for i in range(1, len(uniqueFlow)):
+            fIC.write(", ")
+            fIC.write(uniqueFlow[i])
+        fIC.write(" ];\n\n\n")
+    
+    f.write("% Set the Initial Conditions\n")
+    f.write(f"{ICFilePrefix}\n\n")
+
+    ######################################
+    # Set Function Mathematical Function #
+    ######################################
+    args = ['p']
+    if len(uniqueNBS) >= 1:
+        args.append('nbs')
+    if len(uniqueFlow) >= 1:
+        args.append('flowUp')
+    if len(uniqueftnArgs) >=1:
+        args.append('otherArgs')
+
+    f.write("options = odeset('RelTol',1e-12,'AbsTol',1e-23);\n\n\n")
+
+    f.write("%------------------------- Main Solve ----------------------%\n")
+    f.write(f"[time,y] = ode15s(@(t,y)RHS(t,y,{','.join(args)}), t_start:1:t_final, init_cond, options);\n")
+    f.write("%-----------------------------------------------------------%\n\n\n")
+
+    fRename.write("% Rename solution components\n") ##Modify
+    for i in range(Ns):
+        fRename.write(transform_string(species[i]))
+        fRename.write(" = y(:,")
+        fRename.write(str(i+1))
+        fRename.write("); \n")
+
+    f.write("% Rename solution components\n") ##Modify
+    f.write(f"{RenamePrefix}\n") ##Modify
+
+    f.write("%  \n")
+    f.write("% Place plots or other calculations here\n")
+    f.write("%   \n")
+    f.write("% Example: \n")
+    f.write("% plot(time, ")
+    f.write(str(transform_string(species[0])))
+    f.write(", 'k-o', 'LineWidth', 4, 'MarkerSize', 4); legend('")
+    f.write(str(species[0]))
+    f.write("');\n\n\n")
+
+    f.write("end\n\n\n\n")
+
+    f.write("%-----------------------------------------------------%\n")
+    f.write("%-------------------- RHS Function -------------------%\n")
+    f.write("%-----------------------------------------------------%\n\n")
+
+    f.write(f"function dy = RHS(t,y,{','.join(args)})\n\n")
+    
+    f.write("dy = zeros(")
+    f.write(str(Ns))
+    f.write(",1);\n")
+    f.write("\n\n")
+
+    f.write("% Rename Variables \n\n") ## Modify
+
+    for i in range(Ns):
+        f.write(str(transform_string(species[i])))
+        f.write("   = y(")
+        f.write(str(i+1))
+        f.write("); \n")
+    f.write("\n\n")
+
+    f.write("% Rename Kinetic Parameters \n")
+    for i in range(len(uniqueRates)):
+        f.write(str(uniqueRates[i]))
+        f.write(" = p(")
+        f.write(str(i+1))
+        f.write(");  \n")
+    f.write("\n\n")
+
+    if len(uniqueNBS) >=1:
+        f.write("% Rename Binding Site \n")
+        for i in range(len(uniqueNBS)):
+            f.write(str(uniqueNBS[i]))
+            f.write(" = nbs(")
+            f.write(str(i+1))
+            f.write(");  \n")
+        f.write("\n\n")
+
+    if len(uniqueftnArgs) >=1:
+        f.write("% Rename Function Arguments Site \n")
+        for i in range(len(uniqueftnArgs)):
+            f.write(str(uniqueftnArgs[i]))
+            f.write(" = otherArgs(")
+            f.write(str(i+1))
+            f.write(");  \n")
+        f.write("\n\n")
+
+    if len(uniqueFlow) >=1:
+        f.write("% Rename Flow Up \n")
+        for i in range(len(uniqueFlow)):
+            f.write(str(uniqueFlow[i]))
+            f.write(" = flowUp(")
+            f.write(str(i+1))
+            f.write(");  \n")
+        f.write("\n\n")
+
+    f.write("% ODEs from reaction equations \n\n")
+
+    if verbose: print("\tWriting ODEs now....")
+
+    ################################
+    # NEW: Working on the Dilution #
+    ################################
+    
+    #DILUTION = False
+    if DILUTION:
+        first_func = dilution_list[0]  # Access the first element
+        dil_string = f"{first_func['name']}({', '.join(first_func['args'])})"
+    
     for i in range(Ns): #For each Species
         speciesName = species[i]
         isLipidSpecies = specialSpecies.get(speciesName) == "LIPID"
@@ -1696,7 +2159,8 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
         print(f"DONE! Successfully created Matlab Files")
         print('-' * 50)
     
-    
+
+
 #To include to text-wrap in Matlab file when output. Not being used yet.
 def add_line_continuations(code: str, max_line_length: int = 80) -> str:
     lines = code.split('\n')
@@ -1741,7 +2205,7 @@ def create_matlab_function(function_dict):
 # *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-* Main Code *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-* #
 #################################################################################
 
-verbose                           = False
+verbose                           = True
 verboseReaction                   = False
 determineLipidConservedQuantities = False
 previewVal                        = 10
@@ -1757,9 +2221,7 @@ parsed_data = parseInputFile(verbose)
 
 biochemicalReactions = parsed_data["biochemicalReactions"]
 initialConditions    = parsed_data["initialConditions"]
-lipidSpecies         = parsed_data["lipidSpecies"]
-plateletSpecies      = parsed_data["plateletSpecies"]
-plateletSites        = parsed_data["plateletSites"]
+speciesDefined       = parsed_data["specialSpecies"] #Lipid (Active/Inactive) Platelet (Procoag), Sites & Stores
 functionsDefined     = parsed_data["functionCondition"]
 parameters           = parsed_data["parameterCondition"]
 dilutionCondition    = parsed_data["dilutionCondition"]
@@ -1769,26 +2231,43 @@ DILUTION             = parsed_data["DILUTION"]
 # Step 1: Parse and Check for Consistency in all Inputs #
 #########################################################
 
-parsed_ICs            = parseInitialConditions(initialConditions,verbose)
-parsedLipidSpecies    = parseList(lipidSpecies,"LIPID", verbose)
-parsedPlateletSpecies = parseList(plateletSpecies,"PLATELET", verbose)
-parsedPlateletSites   = parseList(plateletSites,"PLATELET_SITE", verbose)
-parsedFunctions       = parseFunction(functionsDefined,verbose)
-parsedParameters      = parseParameters(parameters, verbose)
-parsedDilution        = parseDilution(dilutionCondition, verbose)
+parsed_ICs                   = parseInitialConditions(initialConditions,verbose)
+specialSpecies, errorFlag    = parseSpecies(speciesDefined,verbose)
+parsedFunctions              = parseFunction(functionsDefined,verbose)
+parsedParameters             = parseParameters(parameters, verbose)
+parsedDilution               = parseDilution(dilutionCondition, verbose)
+
+print(f"{specialSpecies}")
+
+#exit(-1)
 
 #Store all special named species
-specialSpecies = {} #Dictionary for special species
-appendToSpecialSpecies(specialSpecies,parsedLipidSpecies,"LIPID")
-appendToSpecialSpecies(specialSpecies,parsedPlateletSpecies,"PLATELET")
-appendToSpecialSpecies(specialSpecies,parsedPlateletSites,"PLATELET_SITE")
+#specialSpecies = {} #Dictionary for special species
+#appendToSpecialSpecies(specialSpecies,parsedLipidSpecies,"LIPID")
+#appendToSpecialSpecies(specialSpecies,parsedPlateletSpecies,"PLATELET")
+#appendToSpecialSpecies(specialSpecies,parsedPlateletSites,"PLATELET_SITE")
 
 #######################################################
 # Step 2: Parse and Error Check Biochemical Reactions #
 #######################################################
 
 # (2a) Do initial parsing of reactions
-parsed_reactions = parseReactions(biochemicalReactions, parsedPlateletSites, verbose, verboseReaction)
+#parsedPlateletSites = {
+#    name: info
+#    for name, info in specialSpecies.items()
+#    if info["type"] == "PLATELET_SITE"
+#}
+#parsedLipidSpecies = {
+#    name: info
+#    for name, info in specialSpecies.items()
+#    if info["type"] == "LIPID"
+#}
+#parsedPlateletSpecies = {
+#    name: info
+#    for name, info in specialSpecies.items()
+#    if info["type"] == "PLATELET" or info["type"] == "PROCOAG_PLATELET"
+#}
+parsed_reactions = parseReactions(biochemicalReactions, getSubset(specialSpecies,"PLATELET_SITE"), verbose, verboseReaction)
 
 # (2b) Check for & Remove Duplicates in reaction list
 unique_reactions = set()
@@ -1833,7 +2312,7 @@ for reaction in parsed_reactions:
         
     if(reaction.reactionType == "MASS_ACTION"):
         # Check for plateletSites in reactionModifiers
-        for site in parsedPlateletSites:
+        for site in getSubset(specialSpecies,"PLATELET_SITE"):
             if site in reaction.reactionModifiers:
                 val = reaction.reactionModifiers[site]
                 # Check if val is NOT an integer (could be symbolic expression or parameter name)
@@ -1977,7 +2456,6 @@ print("=" * 50)
 # (3) Error Check: All FLOW rxns should have the same parameter (could easily allow for 2)
 # (4) Error Check: All FLOW rxns should have either [1,0] or [0,1] species reactants
 
-
 ##########################################
 # Step 3: Create Stoichiometric Matrices #
 #   - Columns: Species                   #
@@ -2001,12 +2479,18 @@ if reaction_type_count["FLOW"] > 0:
 
 print(f"(*) Species Details:")
 print(f"\t- All Species: {', '.join(unique_species)}")
-if len(parsedLipidSpecies)>0:
-    print(f"\t- Lipid Species: {', '.join(parsedLipidSpecies)}")
-if len(parsedPlateletSpecies)>0:
-    print(f"\t- Platelet Species: {', '.join(parsedPlateletSpecies)}")
-if len(parsedPlateletSites)>0:
-    print(f"\t- Platelet Sites: {', '.join(parsedPlateletSites)}")
+lipidSpeciesList    = getSubset(specialSpecies,"LIPID").keys()
+plateletSpeciesList = getSubset(specialSpecies,"PLATELET","PROCOAG_PLATELET").keys()
+plateletSitesList   = getSubset(specialSpecies,"PLATELET_SITE").keys()
+plateletStoreList   = getSubset(specialSpecies,"PLATELET_STORE").keys()
+if len(lipidSpeciesList)>0:
+    print(f"\t- Lipid Species: {', '.join(lipidSpeciesList)}")
+if len(plateletSpeciesList)>0:
+    print(f"\t- Platelet Species: {', '.join(plateletSpeciesList)}")
+if len(plateletSitesList)>0:
+    print(f"\t- Platelet Sites: {', '.join(plateletSitesList)}")
+if len(plateletStoreList)>0:
+    print(f"\t- Platelet Sites: {', '.join(plateletStoreList)}")
 
 print(f"(*) Parameter Details:")
 if reaction_type_count["LIPID"] > 0 or reaction_type_count["PLATELET"] > 0:
@@ -2022,7 +2506,6 @@ if len(parsedFunctions)>0:
     func_strings = [f"{func['name']}({', '.join(func['args'])})" for func in parsedFunctions]
     print(f"\t- Functions Defined: {func_strings}")
     
-
 if DILUTION:
     first_func = parsedDilution[0]  # Access the first element
     dil_string = f"{first_func['name']}({', '.join(first_func['args'])})"
@@ -2030,22 +2513,21 @@ if DILUTION:
 
 print("=" * 50)
 
-
 if verbose:
     print(f"(Q): Do all Specified Species Occur in the Biochemical Reactions?")
 
     # Check Lipid Species
-    for lipid in parsedLipidSpecies:
+    for lipid in lipidSpeciesList:
         if lipid not in unique_species:
             print(f"\tWarning: Lipid species '{lipid}' not found in biochemical reactions.")
 
     # Check Platelet Species
-    for platelet in parsedPlateletSpecies:
+    for platelet in plateletSpeciesList:
         if platelet not in unique_species:
             print(f"\tWarning: Platelet species '{platelet}' not found in biochemical reactions.")
 
     # Check Platelet Sites
-    for site in parsedPlateletSites:
+    for site in plateletSitesList:
         if site not in unique_species:
             print(f"\tWarning: Platelet site '{site}' not found in biochemical reactions.")
 

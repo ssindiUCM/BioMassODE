@@ -1,11 +1,11 @@
-function [time,y] = CoagFlowTest/FlowMatlab(t_start,t_final)
+function [time,y] = FlowRevisedMatlab(t_start,t_final)
 % Solves a system of ODEs from t=t_start to t=t_final 
 % If no start time is given, then t_start = 0 
 % If no start or final time is given, then t_start = 0, t_final = 30*60 
 %
 %
 % This file was created by issuing command: 
-%     python createMatlabFile.py CoagFlowTest/Flow.txt
+%     python createMatlabFile.py CoagFlowTest/FlowRevised.txt
 %
 
 if nargin == 0
@@ -18,10 +18,10 @@ end
 
 
 % Set the Kinetic Parameters
-CoagFlowTest/FlowParams
+FlowRevisedParams
 
 % Set the Initial Conditions
-CoagFlowTest/FlowIC
+FlowRevisedIC
 
 options = odeset('RelTol',1e-12,'AbsTol',1e-23);
 
@@ -32,7 +32,7 @@ options = odeset('RelTol',1e-12,'AbsTol',1e-23);
 
 
 % Rename solution components
-CoagFlowTest/FlowRename
+FlowRevisedRename
 %  
 % Place plots or other calculations here
 %   
@@ -132,15 +132,15 @@ PL_up = flowUp(3);
  dV_p =   +  kon_v_p * V * p5  -  koff_v_p * V_p - V_p * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % V
- dV =  - V * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dV =  + dPL_S  + dPL_V  - V * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % p2
- dp2 =  - p2 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dp2 =  + dPL_S  + dPL_V  - p2 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % p5
- dp5 =  - p5 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dp5 =  + dPL_S  + dPL_V  - p5 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
- dy = [ dL_TF, dX, dX_st, dIIa, dV, dPL, dP_SUB, dPL_S, dPL_V, dp2, dIIa_p, dp5, dV_p ];
+ dy = [ dL_TF, dX, dX_st, dIIa, dV, dPL, dP_SUB, dPL_S, dPL_V, dp2, dIIa_p, dp5, dV_p ]';
 
 
 end
