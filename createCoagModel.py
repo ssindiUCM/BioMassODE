@@ -152,7 +152,7 @@ if len(sys.argv) < 2:
         * Solution: For each function argument figure out if it's a species or something else.
         
     Current Version:
-        Suzanne Sindi, 04/11/2025
+        Suzanne Sindi, 04/14/2025
 
     """))
     sys.exit("Usage: python3 createCoagModel.py StaticCoag.txt")
@@ -1311,7 +1311,157 @@ class Stoich:
 # Create Output Files #
 #######################
 
-#def create_matlab_multipleFileOutput(input_file: str, parsed_reactions: list, outputPrefix: str, s: Stoich, species: list, rates: list, uniqueRates: list, uniqueNBS: list, v: bool = False):
+def write_species_ode(f, i, species, s, rates, parsed_reactions, specialSpecies, DILUTION, dil_string, verbose):
+    Ns = len(s.species)
+    Nr = len(s.rates)
+    
+    speciesName = species[i]
+    species_info = specialSpecies.get(speciesName, {})
+    species_type = species_info.get("type")
+    
+    isLipidSpecies = species_type == "LIPID"
+    isPlateletSite = species_type == "PLATELET_SITE"
+    isPlateletStore = species_type == "PLATELET_STORE"
+
+    isOnEmptyLipid = "_s" in speciesName and not "_st" in speciesName and not "_sn" in speciesName
+    isOnTFLipid = "_st" in speciesName
+    isOnSilica = "_sn" in speciesName
+    
+    f.write("% ")
+    f.write(str(transform_string(species[i])))
+    f.write(f"\n d{transform_string(species[i])} = ")
+    
+    for j in range(Nr):  # Assuming Nr = len(rates)
+        isLipidReaction    = (parsed_reactions[j].reactionType=="LIPID")
+        isFlowReaction     = (parsed_reactions[j].reactionType=="FLOW")
+        isFunctionReaction = (parsed_reactions[j].reactionType=="FUNCTION")
+            
+        #################
+        # Case 1: Reaction j DECREASES the amount of species i;
+        #################
+        if (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) < 0):
+            ##################
+            #Part 1.1: Sign, Rate Constant & Stochiometric Change
+            ##################
+            f.write("  -  ")
+            if abs(int(s.stoich[i][j]))>1:
+                f.write(str(abs(int(s.stoich[i][j])))) #Species i change;
+                f.write(" * ")
+            f.write(str(rates[j])) #Reaction Rate
+                
+            ##################
+            #Part 1.2: Modifying the Reaction Rate if Needed for Each Type
+            ##################
+            #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
+            #if isLipidReaction: #This must be a koff
+            # V_s -> V + L; L is correct
+            # (V_s)_dt = -rate
+            # (V)_dt   = +rate
+            # L_dt     = +rate*nbs
+            if isLipidReaction and not (isLipidSpecies or isOnEmptyLipid or isOnTFLipid): #V_s
+                f.write("/")
+                f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
+                 
+            if isFunctionReaction:
+                f.write(" * ")
+                f.write(parsed_reactions[j].reactionModifiers["function"])
+            
+            ##################
+            #Part 1.3: Calculate the forward rate from reactant concentration
+            ##################
+            for k in range(Ns): #Species k
+                if (not math.isnan(s.reactants[k][j])) and (int(s.reactants[k][j]) <= 0):
+                    f.write(" * ")
+                    f.write(transform_string(species[k]))
+                    if (abs(int(s.reactants[k][j])) != 1) and (s.reactants[k][j] != 0):
+                        f.write("^")
+                        f.write(str(abs(int(s.reactants[k][j]))))
+        ##################
+        # Case 2: Reaction j INCREASES the amount of species i;
+        #################
+        elif (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) > 0):
+            ##################
+            #Part 2.1: Sign, Rate Constant & Stochiometric Change
+            ##################
+            f.write("  +  ")
+            if abs(int(s.stoich[i][j]))>1:
+                f.write(str(abs(int(s.stoich[i][j])))) #Species i change;
+                f.write(" * ")
+            f.write(str(rates[j])) #Biochemical Reaction Rate
+                
+            ##################
+            #Part 2.2: Modifying the Reaction Rate if Needed for Each Type
+            ##################
+            #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
+            if isLipidSpecies: #This must be a koff
+                f.write("*")
+                f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
+                
+            if isLipidReaction and ( not isLipidSpecies ) and (isOnEmptyLipid or isOnTFLipid): #V_s
+                f.write("/")
+                f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
+                
+            if isFlowReaction:
+                f.write(" * ")
+                f.write(parsed_reactions[j].reactionModifiers["upstream"])
+            
+            if isFunctionReaction:
+                f.write(" * ")
+                f.write(parsed_reactions[j].reactionModifiers["function"])
+
+            if isPlateletSite and speciesName in parsed_reactions[j].reactionModifiers:
+                #print(f"We are processing a species {speciesName} for a reaction {parsed_reactions[j]}")
+                value = parsed_reactions[j].reactionModifiers[speciesName]
+                if value:  # make sure it's not empty/None
+                    f.write(" * ")
+                    f.write(value)
+
+            ##################
+            #Part 2.3: Calculate the forward rate from reactant concentration
+            ##################
+            for k in range(Ns):
+                ##Double check that this makes sense; perhaps should be reactants.
+                if (not math.isnan(s.reactants[k][j])) and (int(s.reactants[k][j]) <= 0):
+                    f.write(" * ")
+                    f.write(transform_string(species[k]))
+                    if (abs(int(s.reactants[k][j])) != 1) and (s.reactants[k][j] != 0):
+                        f.write("^")
+                        f.write(str(abs(int(s.reactants[k][j]))))
+            
+        #################
+        # Case 3: Reaction j DEPENDS on Species i; but doesn't change it's concentration
+        #################
+        elif (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) == 0):
+            f.write("  +  ")
+            f.write(" 0 ")
+
+    #End Looping over all reactions for species [i];
+    
+    ############################################
+    # Case 4: Platelet Sites & Stores Creation
+    #############################################
+    if ( isPlateletSite or isPlateletStore ):
+        #print(f"We are here with special species: {specialSpecies[speciesName]}")
+        infoSite = specialSpecies[speciesName]
+        for j in range(Ns):
+            if species[j] in specialSpecies:
+                info = specialSpecies[species[j]]
+                if info['type'] == "PROCOAG_PLATELET":
+                    f.write(f" + {infoSite['modifier']} * d{transform_string(species[j])} ")
+
+    ############################################
+    # Case 5: Adding in the Diultion
+    #############################################
+    if DILUTION:
+        f.write(" - ")
+        f.write(transform_string(species[i]))
+        f.write(" * ")
+        f.write(dil_string)
+
+    if verbose:
+        print(f"\t\tSpecies {species[i]} ODE Complete")
+
+    f.write(";\n\n")
 
 def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoich, parsed_reactions: list, species: list, rates: list, uniqueRates: list, uniqueNBS: list, uniqueFlow: list, uniqueftnArgs: list, parsed_ICs: list, parsed_params: list, specialSpecies: list, function_dicts: list, dilution = False, dilution_list = [], verbose: bool = False):
     
@@ -1554,191 +1704,39 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
 
     if verbose: print("\tWriting ODEs now....")
 
-    ################################
-    # NEW: Working on the Dilution #
-    ################################
     
     #DILUTION = False
     if DILUTION:
         first_func = dilution_list[0]  # Access the first element
         dil_string = f"{first_func['name']}({', '.join(first_func['args'])})"
     
-    for i in range(Ns): #For each Species (NOT Platelet Sites)
-        speciesName = species[i]
-        species_info = specialSpecies.get(speciesName, {})
-        species_type = species_info.get("type")
-        
-        isLipidSpecies = species_type == "LIPID"
-        isPlateletSite = species_type == "PLATELET_SITE"
-        isPlateletStore = species_type == "PLATELET_STORE"
-        if(isPlateletSite or isPlateletStore):
-            continue
-        #isLipidSpecies = "L_noTF" in speciesName or "L_TF" in speciesName
-        isOnEmptyLipid = "_s" in speciesName and (not "_st" in speciesName) and (not "_sn" in speciesName)
-        isOnTFLipid    = "_st" in speciesName
-        isOnSilica     = "_sn" in speciesName
-        f.write("% ")
-        f.write(str(transform_string(species[i])))
-        f.write(f"\n d{transform_string(species[i])} = ")
-        #f.write("\n dy(")  ###<---- d"species[i]" =
-        #f.write(str(i+1))
-        #f.write(")  =")
-        for j in range(Nr): #For Each Reaction Rate....
-            isLipidReaction    = (parsed_reactions[j].reactionType=="LIPID")
-            isFlowReaction     = (parsed_reactions[j].reactionType=="FLOW")
-            isFunctionReaction = (parsed_reactions[j].reactionType=="FUNCTION")
-            
-            #################
-            # Case 1: Reaction j DECREASES the amount of species i;
-            #################
-            if (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) < 0):
-                ##################
-                #Part 1: Sign, Rate Constant & Stochiometric Change
-                ##################
-                f.write("  -  ")
-                if abs(int(s.stoich[i][j]))>1:
-                    f.write(str(abs(int(s.stoich[i][j])))) #Species i change;
-                    f.write(" * ")
-                f.write(str(rates[j])) #Reaction Rate
-                
-                ##################
-                #Part 2: Modifying the Reaction Rate if Needed for Each Type
-                ##################
-                #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
-                #if isLipidReaction: #This must be a koff
-                # V_s -> V + L; L is correct
-                # (V_s)_dt = -rate
-                # (V)_dt   = +rate
-                # L_dt     = +rate*nbs
-                if isLipidReaction and not (isLipidSpecies or isOnEmptyLipid or isOnTFLipid): #V_s
-                    f.write("/")
-                    f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
-                 
-                if isFunctionReaction:
-                    f.write(" * ")
-                    f.write(parsed_reactions[j].reactionModifiers["function"])
-                
-                ##################
-                #Part 3: Calculate the forward rate from reactant concentration
-                ##################
-                for k in range(Ns): #Species k
-                    if (not math.isnan(s.reactants[k][j])) and (int(s.reactants[k][j]) <= 0):
-                        f.write(" * ")
-                        f.write(transform_string(species[k]))
-                        if (abs(int(s.reactants[k][j])) != 1) and (s.reactants[k][j] != 0):
-                            f.write("^")
-                            f.write(str(abs(int(s.reactants[k][j]))))
-
-            #################
-            # Case 2: Reaction j INCREASES the amount of species i;
-            #################
-            elif (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) > 0):
-                ##################
-                #Part 1: Sign, Rate Constant & Stochiometric Change
-                ##################
-                f.write("  +  ")
-                if abs(int(s.stoich[i][j]))>1:
-                    f.write(str(abs(int(s.stoich[i][j])))) #Species i change;
-                    f.write(" * ")
-                f.write(str(rates[j])) #Biochemical Reaction Rate
-                
-                ##################
-                #Part 2: Modifying the Reaction Rate if Needed for Each Type
-                ##################
-                #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
-                if isLipidSpecies: #This must be a koff
-                    f.write("*")
-                    f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
-                    
-                if isLipidReaction and ( not isLipidSpecies ) and (isOnEmptyLipid or isOnTFLipid): #V_s
-                    f.write("/")
-                    f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
-                    
-                if isFlowReaction:
-                    f.write(" * ")
-                    f.write(parsed_reactions[j].reactionModifiers["upstream"])
-
-                if isFunctionReaction:
-                    f.write(" * ")
-                    f.write(parsed_reactions[j].reactionModifiers["function"])
-
-                if isPlateletSite and speciesName in parsed_reactions[j].reactionModifiers:
-                    #print(f"We are processing a species {speciesName} for a reaction {parsed_reactions[j]}")
-                    value = parsed_reactions[j].reactionModifiers[speciesName]
-                    if value:  # make sure it's not empty/None
-                        f.write(" * ")
-                        f.write(value)
-
-                ##################
-                #Part 3: Calculate the forward rate from reactant concentration
-                ##################
-                for k in range(Ns):
-                    ##Double check that this makes sense; perhaps should be reactants.
-                    if (not math.isnan(s.reactants[k][j])) and (int(s.reactants[k][j]) <= 0):
-                        f.write(" * ")
-                        f.write(transform_string(species[k]))
-                        if (abs(int(s.reactants[k][j])) != 1) and (s.reactants[k][j] != 0):
-                            f.write("^")
-                            f.write(str(abs(int(s.reactants[k][j]))))
-            
-            #################
-            # Case 3: Reaction j DEPENDS on Species i; but doesn't change it's concentration
-            #################
-            elif (not math.isnan(s.stoich[i][j])) and (int(s.stoich[i][j]) == 0):
-                f.write("  +  ")
-                f.write(" 0 ")
-                
-        #####################
-        # Consider Dilution #
-        #####################
-        if DILUTION:
-            f.write(" - ")
-            f.write(transform_string(species[i]))
-            f.write(" * ")
-            f.write(dil_string)
-        
-        if verbose: print(f"\t\tSpecies {species[i]} ODE Complete")
-        f.write(";\n\n")
-
-    ###
-    # Now let's do the platelet_site and platelet_store variables.
+    # First pass: all species except platelet sites & platelet stores
     for i in range(Ns):
         speciesName = species[i]
         species_info = specialSpecies.get(speciesName, {})
         species_type = species_info.get("type")
-        
-        isPlateletSite = species_type == "PLATELET_SITE"
-        isPlateletStore = species_type == "PLATELET_STORE"
-        if not ( isPlateletSite or isPlateletStore ):
+
+        if species_type in ["PLATELET_SITE", "PLATELET_STORE"]:
             continue
-        
-        f.write("% ")
-        f.write(str(transform_string(species[i])))
-        f.write(f"\n d{transform_string(species[i])} = ")
+        write_species_ode(f, i, species, s, rates, parsed_reactions, specialSpecies, DILUTION, dil_string, verbose)
 
-        for j in range(Ns):
-            speciesName = species[j]
-            species_info = specialSpecies.get(speciesName, {})
-            species_type = species_info.get("type")
-            if species_type == "PROCOAG_PLATELET":
-                f.write(f" + d{transform_string(species[j])} ")
-        
-        if DILUTION:
-            f.write(" - ")
-            f.write(transform_string(species[i]))
-            f.write(" * ")
-            f.write(dil_string)
-        
-        f.write(";\n\n")
+    # Second pass: platelet sites & platelet stores
+    for i in range(Ns):
+        speciesName = species[i]
+        species_info = specialSpecies.get(speciesName, {})
+        species_type = species_info.get("type")
 
-
+        if species_type not in ["PLATELET_SITE", "PLATELET_STORE"]:
+            continue
+        write_species_ode(f, i, species, s, rates, parsed_reactions, specialSpecies, DILUTION, dil_string, verbose)
+    
     
     f.write(f" dy = [ d{transform_string(species[0])}")
     for i in range(1,Ns):
         f.write(f", d{transform_string(species[i])}")
     f.write(" ]';\n\n\n")
     
-    f.write("end")  ###END RHS
+    f.write("end")   ###END RHS
     f.write("\n\n")
 
     ##Output Helper Functions:
@@ -2237,36 +2235,9 @@ parsedFunctions              = parseFunction(functionsDefined,verbose)
 parsedParameters             = parseParameters(parameters, verbose)
 parsedDilution               = parseDilution(dilutionCondition, verbose)
 
-print(f"{specialSpecies}")
-
-#exit(-1)
-
-#Store all special named species
-#specialSpecies = {} #Dictionary for special species
-#appendToSpecialSpecies(specialSpecies,parsedLipidSpecies,"LIPID")
-#appendToSpecialSpecies(specialSpecies,parsedPlateletSpecies,"PLATELET")
-#appendToSpecialSpecies(specialSpecies,parsedPlateletSites,"PLATELET_SITE")
-
 #######################################################
 # Step 2: Parse and Error Check Biochemical Reactions #
 #######################################################
-
-# (2a) Do initial parsing of reactions
-#parsedPlateletSites = {
-#    name: info
-#    for name, info in specialSpecies.items()
-#    if info["type"] == "PLATELET_SITE"
-#}
-#parsedLipidSpecies = {
-#    name: info
-#    for name, info in specialSpecies.items()
-#    if info["type"] == "LIPID"
-#}
-#parsedPlateletSpecies = {
-#    name: info
-#    for name, info in specialSpecies.items()
-#    if info["type"] == "PLATELET" or info["type"] == "PROCOAG_PLATELET"
-#}
 parsed_reactions = parseReactions(biochemicalReactions, getSubset(specialSpecies,"PLATELET_SITE"), verbose, verboseReaction)
 
 # (2b) Check for & Remove Duplicates in reaction list
@@ -2350,6 +2321,12 @@ for reaction in parsed_reactions:
                     flow_species_count[product] += 1
                 else:
                     flow_species_count[product] = 1
+
+##Now we should also add for all the plateletSites and plateletStores the information.
+for name, info in specialSpecies.items():
+    if info["type"] in ["PLATELET_SITE", "PLATELET_STORE"]:
+        species.append(name)
+        nbs.append(info["modifier"])
 
 unique_species = unique_entries_in_order(species)
 unique_rates   = unique_entries_in_order(rates)
@@ -2480,17 +2457,20 @@ if reaction_type_count["FLOW"] > 0:
 print(f"(*) Species Details:")
 print(f"\t- All Species: {', '.join(unique_species)}")
 lipidSpeciesList    = getSubset(specialSpecies,"LIPID").keys()
-plateletSpeciesList = getSubset(specialSpecies,"PLATELET","PROCOAG_PLATELET").keys()
+plateletSpeciesList = getSubset(specialSpecies,"PLATELET").keys()
+procoagPlateletSpeciesList = getSubset(specialSpecies,"PROCOAG_PLATELET").keys()
 plateletSitesList   = getSubset(specialSpecies,"PLATELET_SITE").keys()
 plateletStoreList   = getSubset(specialSpecies,"PLATELET_STORE").keys()
 if len(lipidSpeciesList)>0:
     print(f"\t- Lipid Species: {', '.join(lipidSpeciesList)}")
 if len(plateletSpeciesList)>0:
     print(f"\t- Platelet Species: {', '.join(plateletSpeciesList)}")
+if len(procoagPlateletSpeciesList)>0:
+    print(f"\t- Procoag-Platelet Species: {', '.join(procoagPlateletSpeciesList)}")
 if len(plateletSitesList)>0:
     print(f"\t- Platelet Sites: {', '.join(plateletSitesList)}")
 if len(plateletStoreList)>0:
-    print(f"\t- Platelet Sites: {', '.join(plateletStoreList)}")
+    print(f"\t- Platelet Stores: {', '.join(plateletStoreList)}")
 
 print(f"(*) Parameter Details:")
 if reaction_type_count["LIPID"] > 0 or reaction_type_count["PLATELET"] > 0:

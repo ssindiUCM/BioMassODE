@@ -1,11 +1,11 @@
-function [time,y] = CoagFlowTest/FlowMatlab(t_start,t_final)
+function [time,y] = FlowMatlab(t_start,t_final)
 % Solves a system of ODEs from t=t_start to t=t_final 
 % If no start time is given, then t_start = 0 
 % If no start or final time is given, then t_start = 0, t_final = 30*60 
 %
 %
 % This file was created by issuing command: 
-%     python createMatlabFile.py CoagFlowTest/Flow.txt
+%     python createMatlabFile.py Flow.txt
 %
 
 if nargin == 0
@@ -18,10 +18,10 @@ end
 
 
 % Set the Kinetic Parameters
-CoagFlowTest/FlowParams
+FlowParams
 
 % Set the Initial Conditions
-CoagFlowTest/FlowIC
+FlowIC
 
 options = odeset('RelTol',1e-12,'AbsTol',1e-23);
 
@@ -32,7 +32,7 @@ options = odeset('RelTol',1e-12,'AbsTol',1e-23);
 
 
 % Rename solution components
-CoagFlowTest/FlowRename
+FlowRename
 %  
 % Place plots or other calculations here
 %   
@@ -50,7 +50,7 @@ end
 
 function dy = RHS(t,y,p,nbs,flowUp,otherArgs)
 
-dy = zeros(13,1);
+dy = zeros(14,1);
 
 
 % Rename Variables 
@@ -68,6 +68,7 @@ p2   = y(10);
 IIa_p   = y(11); 
 p5   = y(12); 
 V_p   = y(13); 
+Vh   = y(14); 
 
 
 % Rename Kinetic Parameters 
@@ -86,6 +87,10 @@ koff_v_p = p(11);
 
 % Rename Binding Site 
 nbs_x = nbs(1);  
+np2 = nbs(2);  
+np5 = nbs(3);  
+nv = nbs(4);  
+nhv = nbs(5);  
 
 
 % Rename Function Arguments Site 
@@ -98,7 +103,9 @@ IIa_up = flowUp(1);
 V_up = flowUp(2);  
 PL_up = flowUp(3);  
 
+
 % ODEs from reaction equations 
+
 % L_TF
  dL_TF =   -  kon_x/nbs_x * L_TF * X  +  koff_x * X_st - L_TF * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
@@ -130,15 +137,18 @@ PL_up = flowUp(3);
  dV_p =   +  kon_v_p * V * p5  -  koff_v_p * V_p - V_p * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % V
- dV =   -  kflow * V  +  kflow * V_up  -  kon_v_p * V * p5  +  koff_v_p * V_p - V * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dV =   -  kflow * V  +  kflow * V_up  -  kon_v_p * V * p5  +  koff_v_p * V_p + nv * dPL_S  + nv * dPL_V  - V * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % p2
- dp2 =   -  kon_IIa_p * IIa * p2  +  koff_IIa_p * IIa_p - p2 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dp2 =   -  kon_IIa_p * IIa * p2  +  koff_IIa_p * IIa_p + np2 * dPL_S  + np2 * dPL_V  - p2 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % p5
- dp5 =   -  kon_v_p * V * p5  +  koff_v_p * V_p - p5 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dp5 =   -  kon_v_p * V * p5  +  koff_v_p * V_p + np5 * dPL_S  + np5 * dPL_V  - p5 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
- dy = [ dL_TF, dX, dX_st, dIIa, dV, dPL, dP_SUB, dPL_S, dPL_V, dp2, dIIa_p, dp5, dV_p ]';
+% Vh
+ dVh =  + nhv * dPL_S  + nhv * dPL_V  - Vh * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+
+ dy = [ dL_TF, dX, dX_st, dIIa, dV, dPL, dP_SUB, dPL_S, dPL_V, dp2, dIIa_p, dp5, dV_p, dVh ]';
 
 
 end
