@@ -1,20 +1,27 @@
-#Example Initial Conditions
-IIa_IC   = 5.0;  #µM
-V_IC     = 0;
-P_SUB_IC = 10.0 #\mu M - the IC of the P_SUB
+#File Used for Debugging Purposes only!
+#No Actual Biology is Meant to Be Implied!
+
+#Initial Conditions (In the form of SpeciesName_IC)
+L_TF_IC  = 4.0   
+IIa_IC   = 5.0   #µM 
+V_IC     = 2.0   
+P_SUB_IC = 10.0  #\mu M - the IC of the P_SUB #DONE
 
 #Parameters
-IIa_up  = IIa_IC #\mu M; Let's see if this works!
-V_up    = V_IC
-PL_up   = 1.0    #Set to be a random value. 
-Vp      = 10.00 #\mu M; totally made up number!
-e2P     = 0.001 #\mu M; the threshold amount of e2
-np_v    = 5
-np_ii   = 2
+IIa_up     = IIa_IC #\mu M; 
+V_up       = V_IC   
+PL_up      = 1.0    
+VolP       = 10.00 #\mu M; totally made up number!
+e2P        = 0.001 #\mu M; the threshold amount of e2
+np5        = 500
+np2        = 200
+k_pla_plus = .5
 
 #Function; needs to begin with FUNCTION we have arguments and body; 
-#          Each argument needs to be either a species or a parameter.
+#          Arguments can be species, parameters, or dummy:x (i.e., will be filled in later)
 FUNCTION A(IIa,e2P) = IIa/(e2P + IIa) #1 nM = 0.001 \mu M
+
+FUNCTION B(dummy:x,e2P) = x/(e2P+x)
 
 #Function: Following the format for
 FUNCTION Dilution(VolP,P_SUB,PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P) = (VolP)/((1-VolP)*(PL_S + PL_V))*dPdt(P_SUB,PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P)
@@ -22,14 +29,14 @@ FUNCTION Dilution(VolP,P_SUB,PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P
 FUNCTION dPdt(P_SUB,PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P) = +  k_pla_act * PL * PL_S  + k_pla_act * PL * PL_V  +  kact_e2 * A(IIa,e2P) * PL +  k_pla_plus * PL * P_SUB
 
 #Platelet Species
-PL   = PLATELET  #Platlet in Solution
+PL   = PLATELET  	    #Platelet in Solution
 PL_S = PROCOAG_PLATELET  #Platelet in Subendothelium
 PL_V = PROCOAG_PLATELET  #Platelet in Volume
 
-#Platelet Site (The only species allowed non-constant reaction rates!)
+#Platelet Site 
 p2, np2 = PLATELET_SITE
 p5, np5 = PLATELET_SITE
-V, nv = PLATELET_STORE
+V, nv   = PLATELET_STORE
 Vh, nhv = PLATELET_STORE
 
 #Dilution (Change All the Variables in the Same Way)
@@ -38,7 +45,12 @@ DILUTION = Dilution(VolP,P_SUB, PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,
 #Lipid Reaction: Making sure this works
 L_TF + X <-> X_st, kon_x, koff_x, nbs_x, LIPID
 
-#Flow Reactions
+####THIS IS THE GOAL FOR FLOW
+#Flow Reactions; assume upstream is SpeciesName_up
+FLOW, kflow, X, XI
+FLOW, kflow, TFPI
+####THIS IS THE GOAL FOR FLOW
+
 IIa ->, kflow, FLOW
 -> IIa, kflow, IIa_up, FLOW 
 V ->, kflow, FLOW
@@ -47,15 +59,15 @@ V ->, kflow, FLOW
 PL ->, kflow, FLOW
 
 #Platelet Mass Action Biochemical Equations
-P_SUB + PL -> PL_S, k_pla_plus  #Activation
-P_SUB + PL_V -> PL_S, k_pla_plus
-PL_S -> PL_V + P_SUB, k_pla_minus
-PL_S + PL -> PL_S + PL_V, k_pla_act
-PL_V + PL -> 2*PL_V, k_pla_act
+P_SUB + PL -> PL_S, k_pla_plus            # Platelet Activation
+P_SUB + PL_V -> PL_S, k_pla_plus=1      
+PL_S -> PL_V + P_SUB, k_pla_minus=10    
+PL_S + PL -> PL_S + PL_V, k_pla_act       # Platelet Activation
+PL_V + PL -> 2*PL_V, k_pla_act            # Platelet Activation
+PL -> PL_V, kact_e2, B(IIa,e2P), FUNCTION # Platelet Activation
 
-#Feed Forward Activation.
-PL -> PL_V, kact_e2, A(IIa,e2P), FUNCTION
+#Binding to Platelet Sites:
+IIa + p2 <-> IIa_sp, kon_IIa_sp, koff_IIa_sp #Bound to a platelet
+V + p5 <-> V_sp, kon_v_sp, koff_v_sp
 
-#Binding Sites:
-IIa + p2 <-> IIa_p, kon_IIa_p, koff_IIa_p
-V + p5 <-> V_p, kon_v_p, koff_v_p
+TF + VII -> TF:VII_se, kon_se                      #TF binds to subendothelium

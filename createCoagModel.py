@@ -40,15 +40,15 @@ if len(sys.argv) < 2:
     (1) Variable Specification:
     ----------------------------
     - Comments/Whitespace: Anything following "#" is ignored; Whitespace is ignored.
-    - Species names may contain: [0-9a-zA-Z_:]
-    - Species names must start with a letter (no leading numbers).
+    - Parameter/Species names must start with a letter (no leading numbers).
+    - Parameter/Species names may contain: [0-9a-zA-Z_:]
 
     - Users can define:
         * Initial Conditions (must be a non-negative real number; DEFAULT = 0)
             Ex:
                 IIa_IC  = 5.0;  #mu M
                 V_IC    = 0;
-        * Parameter Values (real valued or as previous initial condition; DEFAULT = 1)
+        * Parameter Values (real values of Initial Conditions; DEFAULT = 1)
             Ex:
                 IIa_up  = IIa_IC #mu M; Let's see if this works!
                 V_up    = V_IC
@@ -64,13 +64,12 @@ if len(sys.argv) < 2:
     ---------------
     (2) Functions:
     ---------------
-    - Functions are defined as a name, list of arguments (comma separated) and body:
+    - Functions are defined as a name, list of arguments (comma separated) and body
+    - Function arguments can be a parameter, species name or a dummy variable (dummy:x)
     - Examples:
         FUNCTION A(IIa,e2P) = IIa/(e2P + IIa) #1 nM = 0.001 mu M
-    - Function arguments can be a parameter, species name
+        FUNCTION B(dummy:x, e2P) = x/(e2P + x)
     
-    * Warning: The use of dummy variables is fine (i.e., x,y,z) but will create a superfulous variable x in the otherArgs.
-
     --------------
     (3) Diultion:
     --------------
@@ -111,15 +110,23 @@ if len(sys.argv) < 2:
             L_TF + II <-> II_st, kon_ii, koff_ii, nbs_ii, LIPID
         - kon_ii units: 1/(concentration * time * binding sites)
 
+    Flow Reactant Support:
+        - Allows specification of flow species as: list, reactions
+        - Requires that the upstream species for S has the name S_up
+   
+    Example Flow List:
+        FLOW, kflow, IIa
+    
     Example Flow Reactions:
           -> K, kflow, K_up, FLOW #Species Flowing In
         K ->  , kflow, FLOW       #Flowing Flowing Out
         
     Supported Features:
     -----------------------------------
+      - Input file lines can be in any order. (For cases w/ duplicates first entry read is retained)
       - Support for non-mass action lipid binding binding.
       - Outputs lipid/platlet binding sites as a separate parameter vector (nbs)
-      - Can handle non-constant coefficients on the RHS for platelet site activation.
+      - Can handle non-constant coefficients on the RHS for platelet sites and stores.
       - Outputs Species and rates output in input order.
       - Supports pure synthesis/degradation/in-out flow (e.g., "-> A", "B ->").
       - Consolidates duplicate kinetic rates.
@@ -130,8 +137,6 @@ if len(sys.argv) < 2:
 
     In-Progress Features (Still Working On):
     -----------------------------------
-      - Platelets go first (PLATELETS, PROCOAG_PLATELET are first in species list)
-      - Parameter values set set by constants.
       - Support for inline kinetic rate values:
         Example:
           A + B -> C, k1=0.1
@@ -147,12 +152,11 @@ if len(sys.argv) < 2:
     -----------------------------------
     - Check for valid reaction types (i.e., flow types must all have the same FLOW rate)
         * Really there are 2 flow rates for biochemical species and platelets.
-    - Add support for dummy variables in the function declaration.
-    - Potential Error: We use Transformed strings (X:V to XbV) but we might not have done this in the arguments for a function. This needs checking.
-        * Solution: For each function argument figure out if it's a species or something else.
-        
+    - Add support for dummy variables in the function declaration (i.e., I can do an "x")
+    - (DONE) Potential Error: We use Transformed strings (X:V to XbV) but we might not have done this in the arguments for a function. (Output transformed args instead of normal args)
+    
     Current Version:
-        Suzanne Sindi, 04/14/2025
+        Suzanne Sindi, 05/06/2025
 
     """))
     sys.exit("Usage: python3 createCoagModel.py StaticCoag.txt")
@@ -264,6 +268,50 @@ def formatFwdReaction(reactants, reactant_coeffs, products, product_coeffs):
 
     return final_string
 
+
+def parseFlowReactions(flowList, verbose=False):
+    
+    formattedReactions = []
+
+    if verbose:
+        print(f"\n{'=' * 50}")
+        print(f"Step 1(d): Convert FLOW reactions to biochemical format")
+        print(f"{'=' * 50}")
+
+    for i, line in enumerate(flowList):
+        parts = [p.strip() for p in line.split(',')]
+
+        if len(parts) < 3:
+            print(f"\tLine {i+1}: Invalid format (too few parts) -> {line}")
+            continue
+
+        keyword, rate, *species = parts
+
+        if keyword != "FLOW":
+            print(f"\tLine {i+1}: Invalid keyword '{keyword}', expected 'FLOW'")
+            continue
+
+        for sp in species:
+            # First reaction: species exits the system
+            outRxn = f"{sp} -> , {rate}, FLOW"
+            # Second reaction: species appears along with its "up" version
+            sp_up = f"{sp}_up"
+            inRxn = f"-> {sp}, {rate}, {sp_up}, FLOW"
+
+            formattedReactions.append(outRxn)
+            formattedReactions.append(inRxn)
+
+            if verbose:
+                print(f"\tLine {i+1}: {sp}")
+                print(f"\t\tGenerated outRxn: {outRxn}")
+                print(f"\t\tGenerated inRxn : {inRxn}")
+
+    if verbose:
+        print(f"{'=' * 50}")
+
+    return formattedReactions
+
+
 def parseReactions(reactions, plateletSites, verbose, verboseDetailed):
 
     if verbose:
@@ -277,7 +325,8 @@ def parseReactions(reactions, plateletSites, verbose, verboseDetailed):
             print(f"\t\t" + biochemicalReactions[i])
         print('-' * 50)
 
-    parsed_reactions = []
+    parsed_reactions  = []
+    newRateParameters = []
 
     for reaction in reactions:
         if verbose: print(f"Processing Reaction: '{reaction}'")
@@ -309,6 +358,7 @@ def parseReactions(reactions, plateletSites, verbose, verboseDetailed):
                 name, value = rate.split('=')
                 names.append(name.strip())  # Store the name part
                 values.append(float(value.strip()))  # Convert the value to a float
+                newRateParameters.append(Parameter(name, value))
             else:
                 names.append(rate.strip())  # Store the rate if no '='
                 values.append(-1)  # Assign -1 as a placeholder for missing values
@@ -324,7 +374,7 @@ def parseReactions(reactions, plateletSites, verbose, verboseDetailed):
             print(f"\tError: Invalid reaction count in: {reaction}")
             continue
     
-    return parsed_reactions
+    return parsed_reactions, newRateParameters
 
 def parse_biochemical_equation(line):
     parts = [p.strip() for p in line.split(",")]
@@ -552,6 +602,7 @@ def parseInputFile(verbose=False):
     specialSpecies = []         # Special Species: Lipid, Platelet, Sites, Stores
     parameterCondition = []     # User-specified parameters (not in-line)
     functionCondition = []      # Dilution and platelet activation
+    flowList = []
     dilutionCondition = []      # Where we store dilution function
 
     numReactionsReadIn = 0
@@ -562,7 +613,8 @@ def parseInputFile(verbose=False):
     numPlateletStores = 0
     numParametersReadIn = 0
     numFunctionsDefined = 0
-    numDilutionCondition = 0;
+    numFlowListDefined = 0
+    numDilutionCondition = 0
     
     DILUTION = False #Flag for if we turn on dilution or not.
 
@@ -612,20 +664,26 @@ def parseInputFile(verbose=False):
                     functionCondition.append(line)
                     numFunctionsDefined += 1
                     if verbose: print(f"\t\tFunctions: {line}")
+                    
+                #(Q3): Do we start the line with FLOW? Then it's a flow LIST!
+                elif line.lstrip().startswith("FLOW"):
+                    flowList.append(line);
+                    numFlowListDefined += 1
+                    if verbose: print(f"\t\tFlow List: {line}")
 
-                #(Q3): Do we start with DIULTION? Then DILUTION = True and we go!
+                #(Q4): Do we start with DIULTION? Then DILUTION = True and we go!
                 elif line.lstrip().startswith("DILUTION"):
                     DILUTION = True;
                     dilutionCondition.append(line)
                     if verbose: print(f"\t\tDilution is True: {line}")
             
-                #(Q4): Is this an intial condition?
+                #(Q5): Is this an intial condition?
                 elif "_IC" in line.split('=')[0].strip():  # Check if it's an initial condition
                     initialConditions.append(line)
                     numInitialConditionsReadIn += 1
                     if verbose: print(f"\t\tInitial Condition: {line}")
                 
-                #(Q5): Does it contain a comma? Then Try for biochemical equation
+                #(Q6): Does it contain a comma? Then Try for biochemical equation
                 elif len(fields) > 1:
                     biochemicalReactions.append(line)
                     numReactionsReadIn += 1
@@ -655,6 +713,7 @@ def parseInputFile(verbose=False):
             ("Platelet Species", numPlateletSpecies),
             ("Parameters", numParametersReadIn),
             ("Functions", numFunctionsDefined),
+            ("Flow List", numFlowListDefined),
             ("Dilution Status", DILUTION )
         ]
 
@@ -680,6 +739,7 @@ def parseInputFile(verbose=False):
         "specialSpecies": specialSpecies,
         "parameterCondition": parameterCondition,
         "functionCondition": functionCondition,
+        "flowList": flowList,
         "DILUTION" : DILUTION,
         "dilutionCondition": dilutionCondition,
         "counts": {
@@ -690,6 +750,7 @@ def parseInputFile(verbose=False):
             "numPlateletSites": numPlateletSites,
             "numParametersReadIn": numParametersReadIn,
             "numFunctionsDefined": numFunctionsDefined,
+            "numFlowListDefined": numFlowListDefined,
         }
     }
 
@@ -843,7 +904,6 @@ def parseInitialConditions(initialConditions, verbose=False):
 
     return parsed_ICs
 
-
 def parseFunction(functionsDefined,verbose=False):
     parsed_functions = []
     keyword = "FUNCTION"
@@ -872,7 +932,21 @@ def parseFunction(functionsDefined,verbose=False):
             continue
 
         # Validate arguments (should be valid variable names, comma-separated)
-        args_list = [arg.strip() for arg in args.split(",") if arg.strip()]
+        args_list = []
+        dummy_args = []
+
+        for raw_arg in args.split(","):
+            arg = raw_arg.strip()
+            if not arg:
+                continue
+            if arg.startswith("dummy:"):
+                arg_name = arg[len("dummy:"):]
+                dummy_args.append(arg_name)
+                args_list.append(arg_name)
+            else:
+                args_list.append(arg)
+
+        # Validate argument names
         if not all(arg.isidentifier() for arg in args_list):
             if verbose:
                 print(f"\tInvalid function arguments: {args}")
@@ -886,7 +960,7 @@ def parseFunction(functionsDefined,verbose=False):
             continue
 
         # Store valid function details
-        parsed_functions.append({"name": name, "args": args_list, "body": body})
+        parsed_functions.append({"name": name, "args": args_list, "dummy_args": dummy_args,"body": body})
 
         #if verbose:
             #print(f"\tValid function parsed: {name}({', '.join(args_list)}) = {body}")
@@ -932,14 +1006,14 @@ def parseDilution(dilutionCondition,verbose=False):
         # Validate function name (MATLAB/Python compatibility)
         if not name.isidentifier():
             if verbose:
-                print(f"\tInvalid function name: {name}")
+                print(f"\tInvalid dilution function name: {name}")
             continue
 
         # Validate arguments (should be valid variable names, comma-separated)
         args_list = [arg.strip() for arg in args.split(",") if arg.strip()]
         if not all(arg.isidentifier() for arg in args_list):
             if verbose:
-                print(f"\tInvalid function arguments: {args}")
+                print(f"\tInvalid dilution function arguments: {args}")
             continue
 
         # Store valid function details
@@ -1001,7 +1075,9 @@ def parseParameters(parameterLines, verbose=False):
                 continue
 
             # Attempt to parse value as a number
-            if re.match(r"^\d+(\.\d+)?$", value_str):  # Matches integers and decimals
+            #if re.match(r"^\d+(\.\d+)?$", value_str):  # Matches integers and decimals
+            if re.match(r"^[-+]?(?:\d*\.\d+|\d+)$", value_str):  # Matches integers, decimals, and .5 style numbers
+
                 value = float(value_str)
                 if value < 0:
                     print(f"\t⚠️ Error: Parameter '{name}' must be non-negative. Found {value}.")
@@ -1047,16 +1123,43 @@ def parseParameters(parameterLines, verbose=False):
         print("-" * 65)
 
         # Print each parsed parameter
+        #for name, value, value_type in p_data:
+        #    if isinstance(value, float):  # Format Scientific Notation (2 decimal places)
+        #        print(f"{name:<30} |  {value:>10.2e} | {value_type:>10}")
+        #    else:  # Print strings without decimal formatting
+        #        print(f"{name:<30} | {value:>10} | {value_type:>10}")
+        
         for name, value, value_type in p_data:
-            if isinstance(value, float):  # Format floats to 2 decimal places
-                print(f"{name:<30} | {value:>10.2f} | {value_type:>10}")
-            else:  # Print strings without decimal formatting
+            if isinstance(value, float):
+                if value.is_integer():
+                    print(f"{name:<30} | {value:>10.1f} | {value_type:>10}")
+                else:
+                    print(f"{name:<30} | {value:>10.1e} | {value_type:>10}")
+            else:
                 print(f"{name:<30} | {value:>10} | {value_type:>10}")
+
         
         # Print done message and finish with a line
         print(f"{'=' * 65}\n")
         
     return parsed_params
+
+def add_extra_parameters(parsed_params, extra_params, verbose = False):
+    existing_names = {param.name for param in parsed_params}
+    
+    for extra in extra_params:
+        if extra.name in existing_names:
+            print(f"Already exists in parsedParameters - will retain the value already stored: {extra.name}")
+        else:
+            try:
+                # Attempt to convert the value to float
+                numeric_value = float(extra.value)
+                parsed_params.append(Parameter(extra.name, numeric_value))
+                if verbose:
+                    print(f"- Adding value for in-line defined parameter: {Parameter(extra.name, numeric_value)}")
+            except (ValueError, TypeError):
+                print(f"Warning: Parameter '{extra.name}' has a non-numeric value: {extra.value} (not added)")
+
 
 def validate_parameters(parsedParameters, uniqueSpecies, verbose = False):
     numErrors = 0
@@ -1064,6 +1167,8 @@ def validate_parameters(parsedParameters, uniqueSpecies, verbose = False):
         print(f"(Q): Do all parameters defined as a string occur as species_IC?")
         
     for param in parsedParameters:
+        if verbose:
+            print(f"Parameter name: {param.name}\tParameter Value: {param.value}")
         if isinstance(param.value, str):  # Check if value is a string
             match = re.fullmatch(r"([A-Za-z0-9_]+)_IC", param.value)
             if match:
@@ -1476,11 +1581,10 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     if( not NumReactions == Nr):
         print(f"Error in Creating Matlab File: Total Rates do not Match Reactions.\n")
         exit(-1);
-
-    #species = [i.name for i in s.species.keys()]
-    #rates = [i for i in s.rates.keys()]
-    #if v: print('\nOutput File: \n', output_file)
-    #if v: print("\n")
+        
+    # Dictionaries for specified IC's and params
+    ic_dict = {ic.name: ic.value for ic in parsed_ICs}                # Convert IC to dict
+    param_dict = {param.name: param.value for param in parsed_params} #Convert Params to dict
         
     matlabFilePrefix = outputPrefix + "Matlab"
     ICFilePrefix     = outputPrefix + "IC"
@@ -1491,9 +1595,6 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     fParam  = open(ParamPrefix + ".m", 'w')
     fRename = open(RenamePrefix + ".m", 'w')
     f       = open(matlabFilePrefix + ".m", 'w')
-
-    #if v: print('\nOutput File: \n', output_file)
-    #if v: print("\n")
 
     f.write("function [time,y] = ")
     f.write(matlabFilePrefix)
@@ -1509,8 +1610,6 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     f.write("\n")
     f.write("%\n")
     f.write("\n")
-    #f.write("\nif nargin == 1\n")
-    #f.write("     t_start = 0;  % Default start time is 0 \n")
     f.write("if nargin == 0\n")
     f.write("     t_start = 0;     % Default start time is 0\n")
     f.write("     t_final = 30*60; % Default final time is 30*60\n")
@@ -1521,8 +1620,9 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
 
     fParam.write("% Kinetic Parameters \n")
     for i in range(len(uniqueRates)):
-        fParam.write(uniqueRates[i])
-        fParam.write(" = 1; \n")                            #<- Should be able to set initial parameter
+        rate_name = uniqueRates[i]
+        value = param_dict.get(rate_name, 1)  # Default to 1 if not explicitly provided
+        fParam.write(f"{rate_name} = {value}; \n")
 
     fParam.write("\np = [ ")
     fParam.write(uniqueRates[0])
@@ -1534,8 +1634,10 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     if len(uniqueNBS) >=1:
         fParam.write("% Binding Site Parameters \n")
         for i in range(len(uniqueNBS)):
-            fParam.write(uniqueNBS[i])
-            fParam.write(" = 1; \n")                          #<- Should be able to set initial parameter
+            species_name = uniqueNBS[i]
+            value = param_dict.get(species_name, 1)  # Default to 1 if not explicitly provided
+            fParam.write(f"{species_name} = {value}; \n")
+    
         
         fParam.write("\n")
         fParam.write("nbs = [ ")
@@ -1548,8 +1650,9 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     if len(uniqueftnArgs) >=1:
         fParam.write("% Function Arguments \n")
         for i in range(len(uniqueftnArgs)):
-            fParam.write(uniqueftnArgs[i])
-            fParam.write(" = 1; \n")                          #<- Should be able to set initial parameter
+            species_name = uniqueftnArgs[i]
+            value = param_dict.get(species_name, 1)  # Default to 1 if not explicitly provided
+            fParam.write(f"{species_name} = {value}; \n")
         
         fParam.write("\n")
         fParam.write("otherArgs = [ ")
@@ -1562,18 +1665,8 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
     f.write("% Set the Kinetic Parameters\n")
     f.write(f"{ParamPrefix}\n\n")
 
-    ########################################################################################
-    # Set Initial Conditions and Upstream Flow Values: Default value of 0 if not specified #
-    ########################################################################################
-    
-    ic_dict = {ic.name: ic.value for ic in parsed_ICs}                # Convert IC to dict
-    param_dict = {param.name: param.value for param in parsed_params} #Convert Params to dict
-
     fIC.write("% Initial Conditions \n")
     for i in range(Ns):
-        #fIC.write(transform_string(species[i]))
-        #fIC.write("_IC")
-        #fIC.write(" = 0; \n")
         species_name = transform_string(species[i]) + "_IC"
         value = ic_dict.get(species_name, 0)  # Default to 0 if not explicitly provided
         fIC.write(f"{species_name} = {value}; \n")
@@ -1704,11 +1797,11 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
 
     if verbose: print("\tWriting ODEs now....")
 
-    
-    #DILUTION = False
+    #Makes Sure if we transformed a species name
     if DILUTION:
-        first_func = dilution_list[0]  # Access the first element
-        dil_string = f"{first_func['name']}({', '.join(first_func['args'])})"
+        first_func = dilution_list[0]
+        transformed_args = [transform_string(arg) for arg in first_func['args']]
+        dil_string = f"{first_func['name']}({', '.join(transformed_args)})"
     
     # First pass: all species except platelet sites & platelet stores
     for i in range(Ns):
@@ -1769,11 +1862,6 @@ def create_matlab_multipleFileOutputOLD(input_file: str, outputPrefix: str,s: St
     if( not NumReactions == Nr):
         print(f"Error in Creating Matlab File: Total Rates do not Match Reactions.\n")
         exit(-1);
-
-    #species = [i.name for i in s.species.keys()]
-    #rates = [i for i in s.rates.keys()]
-    #if v: print('\nOutput File: \n', output_file)
-    #if v: print("\n")
         
     matlabFilePrefix = outputPrefix + "Matlab"
     ICFilePrefix     = outputPrefix + "IC"
@@ -1784,9 +1872,6 @@ def create_matlab_multipleFileOutputOLD(input_file: str, outputPrefix: str,s: St
     fParam  = open(ParamPrefix + ".m", 'w')
     fRename = open(RenamePrefix + ".m", 'w')
     f       = open(matlabFilePrefix + ".m", 'w')
-
-    #if v: print('\nOutput File: \n', output_file)
-    #if v: print("\n")
 
     f.write("function [time,y] = ")
     f.write(matlabFilePrefix)
@@ -1864,9 +1949,6 @@ def create_matlab_multipleFileOutputOLD(input_file: str, outputPrefix: str,s: St
 
     fIC.write("% Initial Conditions \n")
     for i in range(Ns):
-        #fIC.write(transform_string(species[i]))
-        #fIC.write("_IC")
-        #fIC.write(" = 0; \n")
         species_name = transform_string(species[i]) + "_IC"
         value = ic_dict.get(species_name, 0)  # Default to 0 if not explicitly provided
         fIC.write(f"{species_name} = {value}; \n")
@@ -2222,6 +2304,7 @@ initialConditions    = parsed_data["initialConditions"]
 speciesDefined       = parsed_data["specialSpecies"] #Lipid (Active/Inactive) Platelet (Procoag), Sites & Stores
 functionsDefined     = parsed_data["functionCondition"]
 parameters           = parsed_data["parameterCondition"]
+flowList             = parsed_data["flowList"]
 dilutionCondition    = parsed_data["dilutionCondition"]
 DILUTION             = parsed_data["DILUTION"]
 
@@ -2232,13 +2315,21 @@ DILUTION             = parsed_data["DILUTION"]
 parsed_ICs                   = parseInitialConditions(initialConditions,verbose)
 specialSpecies, errorFlag    = parseSpecies(speciesDefined,verbose)
 parsedFunctions              = parseFunction(functionsDefined,verbose)
+parsedFlowReactions          = parseFlowReactions(flowList,verbose)
 parsedParameters             = parseParameters(parameters, verbose)
 parsedDilution               = parseDilution(dilutionCondition, verbose)
 
 #######################################################
 # Step 2: Parse and Error Check Biochemical Reactions #
 #######################################################
-parsed_reactions = parseReactions(biochemicalReactions, getSubset(specialSpecies,"PLATELET_SITE"), verbose, verboseReaction)
+
+#Add the flow reactions to the full set of reactions:
+biochemicalReactions.extend(parsedFlowReactions)
+
+parsed_reactions, extraParsedParameters = parseReactions(biochemicalReactions, getSubset(specialSpecies,"PLATELET_SITE"), verbose, verboseReaction)
+
+#Add any in-line parsed parameters to the existing list of parameters
+add_extra_parameters(parsedParameters, extraParsedParameters, verbose)
 
 # (2b) Check for & Remove Duplicates in reaction list
 unique_reactions = set()
@@ -2253,7 +2344,7 @@ if verbose:
         print("\t\t---> Suspicious Duplicate Reactions Found. Removing them:")
         print("\n".join(r.equation for r in duplicates))
     else:
-        print("\t--->Sanity Check PASSED: No Duplicate Reactions Found.")
+        print("\t\t\t--->Sanity Check PASSED: No Duplicate Reactions Found.")
 
 # (2c) Determine the Number of reaction types, List of Unique Species, Unique Reaction Rates
 species      = []
@@ -2334,37 +2425,52 @@ unique_nbs     = unique_entries_in_order(nbs)
 unique_flow    = unique_entries_in_order(flow)
 unique_ftnArgs = unique_entries_in_order(functionArgs)
 
-##Because Dilution is not a function modifier, we need to add ALL args for all functions:
-for func in parsedFunctions:
-    # Iterate through each argument in the function's args list
-    for arg in func['args']:
-        # Add to uniqueFtnArgs if it's not already in the list
-        if arg not in unique_ftnArgs:
-            unique_ftnArgs.append(arg)
+#############################################
+# Error Check: Am I using all unique names? #
+#############################################
 
-#Error Check: Am I using all unique names?
+if verbose:
+    print(f"\t(2) Are all species and parameter names unique?")
+    
 all_variable_names = unique_species + unique_rates + unique_nbs + unique_flow
 name_counts        = Counter(all_variable_names)
 duplicates         = [name for name, count in name_counts.items() if count > 1]
 
 if verbose:
     if duplicates:
-        print(f"Error: Duplicate variable names found across categories:", duplicates)
+        print(f"\t\t - Error: Duplicate variable names found across categories:", duplicates)
+        print(f"\t\t Exiting due to duplicate variable error.")
+        exit(-1)
     else:
-        print(f"All variable names are unique across categories.")
+        print(f"\t\t - All variable names are unique across categories.")
 
-#Update: Retain only Unique_FtnArgs that do NOT occur elsewhere
+############################################
+# Do we have Extra Parameters in Functions #
+############################################
+
+##Add in ANY extra arguments from any function in the list
+for func in parsedFunctions:
+    # Iterate through each argument in the function's args list
+    for arg in func['args']:
+        # Add to unique_ftnArgs if it's (1) NOT a dummy and (2) NOT already in unique_ftnArgs;
+        if arg not in func['dummy_args'] and arg not in unique_ftnArgs:
+        #if arg not in unique_ftnArgs:
+            unique_ftnArgs.append(arg)
+ 
+#Update: Retain only Unique_FtnArgs that are NOT another type of variable.
 if verbose:
-    print(f"Looking for additional parameters needed by functions")
-    print(f"Before Filtering: {unique_ftnArgs}")
+    print(f"\t(3) Do we need to add any extra parameters?")
+    #print(f"\t\t - All Function Arguments: {unique_ftnArgs}")
+
 unique_ftnArgs = [arg for arg in unique_ftnArgs if arg not in all_variable_names]
 
 if verbose:
-    print(f"After Filtering: {unique_ftnArgs}")
+    print(f"\t\t - Function Arguments that are New Parameters: {unique_ftnArgs}")
+
 
 # Error Check on Flow Reactions:
 if reaction_type_count["FLOW"] > 0:
-    if verbose: print("\t(2) Error Check: If FLOW reactions are included do they make sense?")
+    if verbose: print("\t(4) Error Check: If FLOW reactions are included do they make sense?")
 
     #(1) Check that all flow reactions have the same term
     if verbose: print(f"\t\t(Q): Is there only 1 rate for Flow reactions?")
@@ -2397,7 +2503,7 @@ if reaction_type_count["FLOW"] > 0:
     #(4) Are all flow reaction modifiers valid (non-negative real numbers or Species_IN)
     ##if verbose: print(f"\t\t(Q): Are all flow reaction modifiers valid?")
         
-    if verbose: print("\t--->Error Check PASSED")
+    if verbose: print("\t\t--->Error Check PASSED")
 
 print("=" * 50)
 print(f"{'Reaction Type Counts':^50}")
@@ -2441,11 +2547,10 @@ print("=" * 50)
 
 # Extract the PREFIX from the input file name
 prefix, _  = os.path.splitext(sys.argv[1])
-
 stoich = createBiochemicalMatrices(unique_species,parsed_reactions,flowRate,prefix,verbose)
 
 print("=" * 50)
-print(f"Other System Details:")
+print(f"System Details:")
 
 if reaction_type_count["FLOW"] > 0:
     print(f"(*) Flow Details:")

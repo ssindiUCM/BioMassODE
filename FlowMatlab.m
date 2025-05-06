@@ -50,7 +50,7 @@ end
 
 function dy = RHS(t,y,p,nbs,flowUp,otherArgs)
 
-dy = zeros(14,1);
+dy = zeros(19,1);
 
 
 % Rename Variables 
@@ -65,10 +65,15 @@ P_SUB   = y(7);
 PL_S   = y(8); 
 PL_V   = y(9); 
 p2   = y(10); 
-IIa_p   = y(11); 
+IIa_sp   = y(11); 
 p5   = y(12); 
-V_p   = y(13); 
-Vh   = y(14); 
+V_sp   = y(13); 
+TF   = y(14); 
+VII   = y(15); 
+TFbVII_se   = y(16); 
+XI   = y(17); 
+TFPI   = y(18); 
+Vh   = y(19); 
 
 
 % Rename Kinetic Parameters 
@@ -79,10 +84,11 @@ k_pla_plus = p(4);
 k_pla_minus = p(5);  
 k_pla_act = p(6);  
 kact_e2 = p(7);  
-kon_IIa_p = p(8);  
-koff_IIa_p = p(9);  
-kon_v_p = p(10);  
-koff_v_p = p(11);  
+kon_IIa_sp = p(8);  
+koff_IIa_sp = p(9);  
+kon_v_sp = p(10);  
+koff_v_sp = p(11);  
+kon_se = p(12);  
 
 
 % Rename Binding Site 
@@ -102,6 +108,9 @@ VolP = otherArgs(2);
 IIa_up = flowUp(1);  
 V_up = flowUp(2);  
 PL_up = flowUp(3);  
+X_up = flowUp(4);  
+XI_up = flowUp(5);  
+TFPI_up = flowUp(6);  
 
 
 % ODEs from reaction equations 
@@ -110,16 +119,16 @@ PL_up = flowUp(3);
  dL_TF =   -  kon_x/nbs_x * L_TF * X  +  koff_x * X_st - L_TF * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % X
- dX =   -  kon_x/nbs_x * L_TF * X  +  koff_x * X_st - X * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dX =   -  kon_x/nbs_x * L_TF * X  +  koff_x * X_st  -  kflow * X  +  kflow * X_up - X * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % X_st
  dX_st =   +  kon_x/nbs_x * L_TF * X  -  koff_x * X_st - X_st * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % IIa
- dIIa =   -  kflow * IIa  +  kflow * IIa_up  -  kon_IIa_p * IIa * p2  +  koff_IIa_p * IIa_p - IIa * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dIIa =   -  kflow * IIa  +  kflow * IIa_up  -  kon_IIa_sp * IIa * p2  +  koff_IIa_sp * IIa_sp - IIa * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % PL
- dPL =   +  kflow * PL_up  -  kflow * PL  -  k_pla_plus * PL * P_SUB  -  k_pla_act * PL * PL_S  -  k_pla_act * PL * PL_V  -  kact_e2 * A(IIa,e2P) * PL - PL * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dPL =   +  kflow * PL_up  -  kflow * PL  -  k_pla_plus * PL * P_SUB  -  k_pla_act * PL * PL_S  -  k_pla_act * PL * PL_V  -  kact_e2 * B(IIa,e2P) * PL - PL * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % P_SUB
  dP_SUB =   -  k_pla_plus * PL * P_SUB  -  k_pla_plus * P_SUB * PL_V  +  k_pla_minus * PL_S - P_SUB * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
@@ -128,27 +137,42 @@ PL_up = flowUp(3);
  dPL_S =   +  k_pla_plus * PL * P_SUB  +  k_pla_plus * P_SUB * PL_V  -  k_pla_minus * PL_S  +   0  - PL_S * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % PL_V
- dPL_V =   -  k_pla_plus * P_SUB * PL_V  +  k_pla_minus * PL_S  +  k_pla_act * PL * PL_S  +  k_pla_act * PL * PL_V  +  kact_e2 * A(IIa,e2P) * PL - PL_V * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dPL_V =   -  k_pla_plus * P_SUB * PL_V  +  k_pla_minus * PL_S  +  k_pla_act * PL * PL_S  +  k_pla_act * PL * PL_V  +  kact_e2 * B(IIa,e2P) * PL - PL_V * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
-% IIa_p
- dIIa_p =   +  kon_IIa_p * IIa * p2  -  koff_IIa_p * IIa_p - IIa_p * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+% IIa_sp
+ dIIa_sp =   +  kon_IIa_sp * IIa * p2  -  koff_IIa_sp * IIa_sp - IIa_sp * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
-% V_p
- dV_p =   +  kon_v_p * V * p5  -  koff_v_p * V_p - V_p * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+% V_sp
+ dV_sp =   +  kon_v_sp * V * p5  -  koff_v_sp * V_sp - V_sp * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+
+% TF
+ dTF =   -  kon_se * TF * VII - TF * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+
+% VII
+ dVII =   -  kon_se * TF * VII - VII * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+
+% TFbVII_se
+ dTFbVII_se =   +  kon_se * TF * VII - TFbVII_se * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+
+% XI
+ dXI =   -  kflow * XI  +  kflow * XI_up - XI * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+
+% TFPI
+ dTFPI =   -  kflow * TFPI  +  kflow * TFPI_up - TFPI * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % V
- dV =   -  kflow * V  +  kflow * V_up  -  kon_v_p * V * p5  +  koff_v_p * V_p + nv * dPL_S  + nv * dPL_V  - V * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dV =   -  kflow * V  +  kflow * V_up  -  kon_v_sp * V * p5  +  koff_v_sp * V_sp + nv * dPL_S  + nv * dPL_V  - V * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % p2
- dp2 =   -  kon_IIa_p * IIa * p2  +  koff_IIa_p * IIa_p + np2 * dPL_S  + np2 * dPL_V  - p2 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dp2 =   -  kon_IIa_sp * IIa * p2  +  koff_IIa_sp * IIa_sp + np2 * dPL_S  + np2 * dPL_V  - p2 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % p5
- dp5 =   -  kon_v_p * V * p5  +  koff_v_p * V_p + np5 * dPL_S  + np5 * dPL_V  - p5 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
+ dp5 =   -  kon_v_sp * V * p5  +  koff_v_sp * V_sp + np5 * dPL_S  + np5 * dPL_V  - p5 * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
 % Vh
  dVh =  + nhv * dPL_S  + nhv * dPL_V  - Vh * Dilution(VolP, P_SUB, PL, PL_S, PL_V, IIa, k_pla_act, k_pla_plus, kact_e2, e2P);
 
- dy = [ dL_TF, dX, dX_st, dIIa, dV, dPL, dP_SUB, dPL_S, dPL_V, dp2, dIIa_p, dp5, dV_p, dVh ]';
+ dy = [ dL_TF, dX, dX_st, dIIa, dV, dPL, dP_SUB, dPL_S, dPL_V, dp2, dIIa_sp, dp5, dV_sp, dTF, dVII, dTFbVII_se, dXI, dTFPI, dVh ]';
 
 
 end
@@ -159,6 +183,14 @@ function output = A(IIa, e2P)
     % Arguments: IIa, e2P
     % Body: IIa/(e2P + IIa)
     output = IIa/(e2P + IIa);
+end
+
+
+function output = B(x, e2P)
+    % Function: B
+    % Arguments: x, e2P
+    % Body: x/(e2P+x)
+    output = x/(e2P+x);
 end
 
 
