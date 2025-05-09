@@ -55,7 +55,7 @@ if len(sys.argv) < 2:
                 PL_up   = 1.0    #Set to be a random value.
         * Special classes of species: LIPID, PLATELET, PLATELET_SITE
             Ex:
-                PL      = PLATELET          #Platlet in Solution
+                PL      = PLATELET          #Platelet in Solution
                 PL_S    = PROCOAG_PLATELET  #Platelet in Subendothelium
                 PL_V    = PROCOAG_PLATELET  #Platelet in Volume
                 p2      = PLATELET_SITE
@@ -71,10 +71,10 @@ if len(sys.argv) < 2:
         FUNCTION B(dummy:x, e2P) = x/(e2P + x)
     
     --------------
-    (3) Diultion:
+    (3) Dilution:
     --------------
-    - A flag that turns on a diultion equation for every species.
-    - The diultion function (and any dependent reactions) must already be defined.
+    - A flag that turns on a dilution equation for every species.
+    - The dilution function (and any dependent reactions) must already be defined.
     
     Ex:
     DILUTION = Dilution(VolP,PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P)
@@ -111,7 +111,7 @@ if len(sys.argv) < 2:
         - kon_ii units: 1/(concentration * time * binding sites)
 
     Flow Reactant Support:
-        - Allows specification of flow species as: list, reactions
+        - Allows specification of flow species in two ways: list, reactions
         - Requires that the upstream species for S has the name S_up
    
     Example Flow List:
@@ -125,7 +125,7 @@ if len(sys.argv) < 2:
     -----------------------------------
       - Input file lines can be in any order. (For cases w/ duplicates first entry read is retained)
       - Support for non-mass action lipid binding binding.
-      - Outputs lipid/platlet binding sites as a separate parameter vector (nbs)
+      - Outputs lipid/platelet binding sites as a separate parameter vector (nbs)
       - Can handle non-constant coefficients on the RHS for platelet sites and stores.
       - Outputs Species and rates output in input order.
       - Supports pure synthesis/degradation/in-out flow (e.g., "-> A", "B ->").
@@ -144,16 +144,9 @@ if len(sys.argv) < 2:
 
     Feature to Consider Developing:
     -----------------------------------
-    - Allow setting rates and initial conditions from text file or external file.
-    - Improve MATLAB text wrapping for long lines.
-    - Add back support for Python code.
-
-    Problems to Resolve:
-    -----------------------------------
-    - Check for valid reaction types (i.e., flow types must all have the same FLOW rate)
-        * Really there are 2 flow rates for biochemical species and platelets.
-    - Add support for dummy variables in the function declaration (i.e., I can do an "x")
-    - (DONE) Potential Error: We use Transformed strings (X:V to XbV) but we might not have done this in the arguments for a function. (Output transformed args instead of normal args)
+      - Allow setting rates and initial conditions separate external file.
+      - Improve MATLAB text wrapping for long lines.
+      - Add back support for Python code.
     
     Current Version:
         Suzanne Sindi, 05/06/2025
@@ -911,10 +904,6 @@ def parseFunction(functionsDefined,verbose=False):
         rf"^{keyword}\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)\s*=\s*(.+)$"
     )
 
-    #if verbose:
-        #print('-' * 50)
-        #print(f"Step 1(e): Parse Specified Functions")
-
     for func in functionsDefined:
         match = function_pattern.match(func.strip())
 
@@ -973,10 +962,7 @@ def parseFunction(functionsDefined,verbose=False):
         for fVal in parsed_functions:  # Assuming parsed_ICs is a list of InitialCondition objects
             # Print table header for initial conditions
             print(f"{fVal}")
-        
-        #print(f"DONE: Step 1(e): Parse Specified Functions")
-        #print('-' * 50)
-
+            
     return parsed_functions
     
 def parseDilution(dilutionCondition,verbose=False):
@@ -988,10 +974,6 @@ def parseDilution(dilutionCondition,verbose=False):
     dilution_pattern = re.compile(
         r"^\s*DILUTION\s*=\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)\s*$"
     )
-    
-    #if verbose:
-    #    print('-' * 50)
-    #    print(f"Step 1(g): Parse Specified Functions")
 
     for func in dilutionCondition:
         match = dilution_pattern.match(func.strip())
@@ -1019,9 +1001,6 @@ def parseDilution(dilutionCondition,verbose=False):
         # Store valid function details
         parsed_dilution.append({"name": name, "args": args_list})
 
-        #if verbose:
-        #    print(f"\tValid Dilution function parsed: {name}({', '.join(args_list)})")
-            
     if len(parsed_dilution)>1:
         print(f"Warning: More than 1 diultion function given. Will only use the first.")
 
@@ -1034,9 +1013,6 @@ def parseDilution(dilutionCondition,verbose=False):
             # Print table header for initial conditions
             print(f"{fVal}")
         
-        #print(f"DONE: Step 1(g): Parse Dilution Function")
-        #print('-' * 50)
-
     return parsed_dilution
 
 
@@ -1075,7 +1051,6 @@ def parseParameters(parameterLines, verbose=False):
                 continue
 
             # Attempt to parse value as a number
-            #if re.match(r"^\d+(\.\d+)?$", value_str):  # Matches integers and decimals
             if re.match(r"^[-+]?(?:\d*\.\d+|\d+)$", value_str):  # Matches integers, decimals, and .5 style numbers
 
                 value = float(value_str)
@@ -1122,13 +1097,6 @@ def parseParameters(parameterLines, verbose=False):
         print(f"{p_headers[0]:<30} | {p_headers[1]:>10} | {p_headers[2]:>10}")
         print("-" * 65)
 
-        # Print each parsed parameter
-        #for name, value, value_type in p_data:
-        #    if isinstance(value, float):  # Format Scientific Notation (2 decimal places)
-        #        print(f"{name:<30} |  {value:>10.2e} | {value_type:>10}")
-        #    else:  # Print strings without decimal formatting
-        #        print(f"{name:<30} | {value:>10} | {value_type:>10}")
-        
         for name, value, value_type in p_data:
             if isinstance(value, float):
                 if value.is_integer():
@@ -1138,7 +1106,6 @@ def parseParameters(parameterLines, verbose=False):
             else:
                 print(f"{name:<30} | {value:>10} | {value_type:>10}")
 
-        
         # Print done message and finish with a line
         print(f"{'=' * 65}\n")
         
@@ -1462,12 +1429,6 @@ def write_species_ode(f, i, species, s, rates, parsed_reactions, specialSpecies,
             ##################
             #Part 1.2: Modifying the Reaction Rate if Needed for Each Type
             ##################
-            #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
-            #if isLipidReaction: #This must be a koff
-            # V_s -> V + L; L is correct
-            # (V_s)_dt = -rate
-            # (V)_dt   = +rate
-            # L_dt     = +rate*nbs
             if isLipidReaction and not (isLipidSpecies or isOnEmptyLipid or isOnTFLipid): #V_s
                 f.write("/")
                 f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
@@ -1643,7 +1604,6 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
             value = param_dict.get(species_name, 1)  # Default to 1 if not explicitly provided
             fParam.write(f"{species_name} = {value}; \n")
     
-        
         fParam.write("\n")
         fParam.write("nbs = [ ")
         fParam.write(uniqueNBS[0])
@@ -2086,11 +2046,10 @@ def create_matlab_multipleFileOutputOLD(input_file: str, outputPrefix: str,s: St
 
     if verbose: print("\tWriting ODEs now....")
 
-    ################################
-    # NEW: Working on the Dilution #
-    ################################
+    ####################
+    # Process Diultion #
+    ####################
     
-    #DILUTION = False
     if DILUTION:
         first_func = dilution_list[0]  # Access the first element
         dil_string = f"{first_func['name']}({', '.join(first_func['args'])})"
@@ -2099,7 +2058,6 @@ def create_matlab_multipleFileOutputOLD(input_file: str, outputPrefix: str,s: St
         speciesName = species[i]
         isLipidSpecies = specialSpecies.get(speciesName) == "LIPID"
         isPlateletSite = specialSpecies.get(speciesName) == "PLATELET_SITE"
-        #isLipidSpecies = "L_noTF" in speciesName or "L_TF" in speciesName
         isOnEmptyLipid = "_s" in speciesName and (not "_st" in speciesName) and (not "_sn" in speciesName)
         isOnTFLipid    = "_st" in speciesName
         isOnSilica     = "_sn" in speciesName
@@ -2128,13 +2086,7 @@ def create_matlab_multipleFileOutputOLD(input_file: str, outputPrefix: str,s: St
                 
                 ##################
                 #Part 2: Modifying the Reaction Rate if Needed for Each Type
-                ##################
-                #Writing the Reaction Rate isLipidSpecies (true/false); isLipidReaction (true/false)
-                #if isLipidReaction: #This must be a koff
-                # V_s -> V + L; L is correct
-                # (V_s)_dt = -rate
-                # (V)_dt   = +rate
-                # L_dt     = +rate*nbs
+                #################
                 if isLipidReaction and not (isLipidSpecies or isOnEmptyLipid or isOnTFLipid): #V_s
                     f.write("/")
                     f.write(parsed_reactions[j].reactionModifiers["bindingSites"])
@@ -2245,8 +2197,6 @@ def create_matlab_multipleFileOutputOLD(input_file: str, outputPrefix: str,s: St
     if verbose:
         print(f"DONE! Successfully created Matlab Files")
         print('-' * 50)
-    
-
 
 #To include to text-wrap in Matlab file when output. Not being used yet.
 def add_line_continuations(code: str, max_line_length: int = 80) -> str:
@@ -2265,15 +2215,6 @@ def add_line_continuations(code: str, max_line_length: int = 80) -> str:
     return '\n'.join(new_lines)
 
 def create_matlab_function(function_dict):
-    """
-    This function parses the dictionary and generates a corresponding MATLAB function.
-    
-    Parameters:
-    - function_dict (dict): A dictionary with 'name', 'args', and 'body' keys.
-
-    Returns:
-    - str: A string that represents the MATLAB function code.
-    """
     function_name = function_dict['name']
     args = ', '.join(function_dict['args'])
     body = function_dict['body']
@@ -2536,15 +2477,6 @@ print("=" * 50)
 #(6) Make it possible to be able to in-line declare a biochemical rate:
 #    - Check that any rate for a parameter is the same (error check)
 #(3) All specified parameters should occur somewhere! (Rxn rates, in a function).
-
-########
-# DONE #
-########
-# (1) Funciton arguments can either be: previously defined parameter or NEW one
-#   - Added an extra set of parameters for ones NOT defined elsewhere. (Default Value = 1)
-# (2) For kflow reactions; fixed the reactions to have an in-out type.
-# (3) Error Check: All FLOW rxns should have the same parameter (could easily allow for 2)
-# (4) Error Check: All FLOW rxns should have either [1,0] or [0,1] species reactants
 
 ##########################################
 # Step 3: Create Stoichiometric Matrices #
