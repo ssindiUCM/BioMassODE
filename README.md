@@ -1,4 +1,3 @@
-# BioMassODE
     Python script to generate MATLAB code for Coagulation Biochemical Reactions.
 
     Usage:
@@ -41,7 +40,7 @@
                 PL_up   = 1.0    #Set to be a random value.
         * Special classes of species: LIPID, PLATELET, PLATELET_SITE
             Ex:
-                PL      = PLATELET          #Platlet in Solution
+                PL      = PLATELET          #Platelet in Solution
                 PL_S    = PROCOAG_PLATELET  #Platelet in Subendothelium
                 PL_V    = PROCOAG_PLATELET  #Platelet in Volume
                 p2      = PLATELET_SITE
@@ -57,10 +56,10 @@
         FUNCTION B(dummy:x, e2P) = x/(e2P + x)
     
     --------------
-    (3) Diultion:
+    (3) Dilution:
     --------------
-    - A flag that turns on a diultion equation for every species.
-    - The diultion function (and any dependent reactions) must already be defined.
+    - A flag that turns on a dilution equation for every species.
+    - The dilution function (and any dependent reactions) must already be defined.
     
     Ex:
     DILUTION = Dilution(VolP,PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P)
@@ -97,7 +96,7 @@
         - kon_ii units: 1/(concentration * time * binding sites)
 
     Flow Reactant Support:
-        - Allows specification of flow species as: list, reactions
+        - Allows specification of flow species in two ways: list, reactions
         - Requires that the upstream species for S has the name S_up
    
     Example Flow List:
@@ -111,7 +110,7 @@
     -----------------------------------
       - Input file lines can be in any order. (For cases w/ duplicates first entry read is retained)
       - Support for non-mass action lipid binding binding.
-      - Outputs lipid/platlet binding sites as a separate parameter vector (nbs)
+      - Outputs lipid/platelet binding sites as a separate parameter vector (nbs)
       - Can handle non-constant coefficients on the RHS for platelet sites and stores.
       - Outputs Species and rates output in input order.
       - Supports pure synthesis/degradation/in-out flow (e.g., "-> A", "B ->").
@@ -130,11 +129,9 @@
 
     Feature to Consider Developing:
     -----------------------------------
-    - Allow setting rates and initial conditions seprate external file.
-    - Improve MATLAB text wrapping for long lines.
-    - Add back support for Python code.
-
+      - Allow setting rates and initial conditions separate external file.
+      - Improve MATLAB text wrapping for long lines.
+      - Add back support for Python code.
+    
     Current Version:
         Suzanne Sindi, 05/06/2025
-
-Usage: python3 createMatlabFile.py StaticCoag.txt
