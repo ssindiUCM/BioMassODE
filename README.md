@@ -1,63 +1,140 @@
 # BioMassODE
-Converts a biochemical system of equations with the law of mass action to a system of ODEs.
+    Python script to generate MATLAB code for Coagulation Biochemical Reactions.
 
-Python code that generates a Matlab Code for Law of Mass action Reactions
+    Usage:
+        python3 createCoagModel.py StaticCoag.txt
 
-Use: python3 createMatlabFile.py StaticCoag.txt
+    Input File: StaticCoag.txt (List of Biochemical Reactions)
+    
+    Output File(s): Separates outputs for initial conditions, parameters, and code.
+        (Assumes prefix based on input file)
+        - StaticCoagMatlab.m (assumes prefix).
+        - StaticCoagIC.m
+        - StaticCoagParams.m
+        - StaticCoagRename.m
 
-StaticCoag.txt:
-- Can contain comments that are proceeded with "#" (will be ignored)
-- Can contain whitespace (will be ignored)
-- Two types of structure are allowed for biochemical reactions: Forward, Reversible
+    -*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*--*-
+    
+    Input File Specifications:
+    ----------------------------
+    There are 3 classes of objects that can be specified:
+    (1) [OPTIONAL] Variable Specifications: Initial Conditions, Parameter Values, Special Species
+    (2) [OPTIONAL] Functions (to be used later for dilution/non-mass action biochemical kinetics)
+    (3) [REQUIRED] Biochemical Reactions
+    
+    ----------------------------
+    (1) Variable Specification:
+    ----------------------------
+    - Comments/Whitespace: Anything following "#" is ignored; Whitespace is ignored.
+    - Parameter/Species names must start with a letter (no leading numbers).
+    - Parameter/Species names may contain: [0-9a-zA-Z_:]
 
-SINGLE_REACTION , RATE_VARIABLE
-ex:
-    A + 2 * B -> C , k_1
+    - Users can define:
+        * Initial Conditions (must be a non-negative real number; DEFAULT = 0)
+            Ex:
+                IIa_IC  = 5.0;  #mu M
+                V_IC    = 0;
+        * Parameter Values (real values of Initial Conditions; DEFAULT = 1)
+            Ex:
+                IIa_up  = IIa_IC #mu M; Let's see if this works!
+                V_up    = V_IC
+                PL_up   = 1.0    #Set to be a random value.
+        * Special classes of species: LIPID, PLATELET, PLATELET_SITE
+            Ex:
+                PL      = PLATELET          #Platlet in Solution
+                PL_S    = PROCOAG_PLATELET  #Platelet in Subendothelium
+                PL_V    = PROCOAG_PLATELET  #Platelet in Volume
+                p2      = PLATELET_SITE
+                p5      = PLATELET_SITE
+                
+    ---------------
+    (2) Functions:
+    ---------------
+    - Functions are defined as a name, list of arguments (comma separated) and body
+    - Function arguments can be a parameter, species name or a dummy variable (dummy:x)
+    - Examples:
+        FUNCTION A(IIa,e2P) = IIa/(e2P + IIa) #1 nM = 0.001 mu M
+        FUNCTION B(dummy:x, e2P) = x/(e2P + x)
+    
+    --------------
+    (3) Diultion:
+    --------------
+    - A flag that turns on a diultion equation for every species.
+    - The diultion function (and any dependent reactions) must already be defined.
+    
+    Ex:
+    DILUTION = Dilution(VolP,PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P)
 
-In the case of reversible reactions, two rates must be specified, the forward reaction
-    is always FIRST, eg:
+    FUNCTION Dilution(VolP,PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P) = (VolP)/((1-VolP)*(PL_S + PL_V))*dPdt(PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P)
 
-    A + 2 * B <-> C , k_1 , k_2
+    FUNCTION dPdt(PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,e2P) = +  k_pla_act * PL * PL_S  + k_pla_act * PL * PL_V  +  kact_e2 * A(IIa,e2P) * PL +  k_pla_plus * PL * P_SUB
 
-**Warning: Any invalid reactions will be skipped (and output to the screen).
+    ----------------------------
+    (4) Biochemical Equations:
+    ----------------------------
+    
+    - Assumes biochemical reactions (one per line) of the form:
+            LHS <-> RHS, Rates, TYPE
+    - Supports forward and reversible reactions.
+    - Reaction Operators allowed: '*', '+', '<->', '->'
+    - 5 Reaction Types:
+        * MASS_ACTION: Default (if no type given)
+        * FLOW:        species entering or exiting reaction zone.
+        * LIPID:       Binding on/off lipid (competition)
+        * FUNCTION:    Concentration changing due to reaction zone
 
-Output File: StaticCoagMatlab.m (assumes prefix).
+    Example Reactions:
+        A + 2 * B -> C , k_1 #Forward
+        A + 2 * B <-> C , k_1 , k_2 #Reversible
+        
+    Example Initial Conditions/Parameter Setting:
+        A_IC = 10.0 #\\mu M
+        B_IC = 1.0  #\\mu M
 
-Requirements:
-    1) Only the operators '*', '+', '<->', and '->' are allowed
-    2) Reactions should be pre-simplified, this code will NOT reduce algebra
-    3) Species names can only contain [0-9a-zA-Z_:]
-    4) Species names MUST begin with a letter - no leading numbers allowed
+    Lipid Binding Support:
+        - Allows non-mass action terms for lipid binding:
+            L_TF + II <-> II_st, kon_ii, koff_ii, nbs_ii, LIPID
+        - kon_ii units: 1/(concentration * time * binding sites)
 
-New Features (08/19/2024):
-    1) Allows for pure synthesis or pure degradation. ( -> A, B ->)
-    2) Handles comments/white space in the biochemical equation file.
-    3) Handles duplicate kinetic rates (i.e., p vector is consolidated)
-    4) Handles A + B -> A + C reactions (splits stochiometric matrix)
-    5) Checks for (and removes) duplicate reactions. (i.e., identical reaction)
-        -> Even if the reaction is 1 side of a bi-directional reaction.
-    6) Checks that the dimension of reactions rates is the SAME.
+    Flow Reactant Support:
+        - Allows specification of flow species as: list, reactions
+        - Requires that the upstream species for S has the name S_up
+   
+    Example Flow List:
+        FLOW, kflow, IIa
+    
+    Example Flow Reactions:
+          -> K, kflow, K_up, FLOW #Species Flowing In
+        K ->  , kflow, FLOW       #Flowing Flowing Out
+        
+    Supported Features:
+    -----------------------------------
+      - Input file lines can be in any order. (For cases w/ duplicates first entry read is retained)
+      - Support for non-mass action lipid binding binding.
+      - Outputs lipid/platlet binding sites as a separate parameter vector (nbs)
+      - Can handle non-constant coefficients on the RHS for platelet sites and stores.
+      - Outputs Species and rates output in input order.
+      - Supports pure synthesis/degradation/in-out flow (e.g., "-> A", "B ->").
+      - Consolidates duplicate kinetic rates.
+      - Splits stoichiometric matrix for A + B -> A + C reactions.
+      - Removes duplicate reactions (even one side of bidirectional ones).
+      - Checks reaction rate dimensions for consistency.
+      - Initial conditions can be set in the input file.
 
-Coag Specific Changes:
-    1) Creates variables to track active and in-active bound lipid sites (s and _st)
-        -> Counts the number of "s" and "st" in each species name.
-    2) Separately creates outputs for initial conditions, parameters and code.
-        -> Could do a --coag flag = false to do the original mode.
+    In-Progress Features (Still Working On):
+    -----------------------------------
+      - Support for inline kinetic rate values:
+        Example:
+          A + B -> C, k1=0.1
+          A + B <-> C, kon, koff=100
 
-Other Features to Consider:
-    1) Keep the species/rates in the same order the StaticCoag.txt file was in <-Helpful
-        -> Currently sorting species alphabetically, rates are not in any particular order.
-    2) Set the rates of reactions and initial conditions based on a file. <- Helpful
-        -> Could have a user input values (separate file) and use 1 for missing values.
-    3) Original version allowed "=" operator. Not sure what this was for.
-    4) Text wrap for the long lines in Matlab. (Currently half-implemented)
+    Feature to Consider Developing:
+    -----------------------------------
+    - Allow setting rates and initial conditions seprate external file.
+    - Improve MATLAB text wrapping for long lines.
+    - Add back support for Python code.
 
-Based on previous Python Code by:
-Michael Stobb (Originally written on 8/4/2023)
-
-Current Version:
-Suzanne Sindi
-08/19/2024
-
+    Current Version:
+        Suzanne Sindi, 05/06/2025
 
 Usage: python3 createMatlabFile.py StaticCoag.txt
