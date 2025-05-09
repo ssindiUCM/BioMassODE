@@ -1,0 +1,10 @@
+,kpixam,kmixam,kpxm,kmxm,kpxam,kmxam,kpixamx,kmixamx,kpixam,kmixam,kcat,kpxam,kmxam,kpixam,kmixam
+IXa,,1,,,,,,,,1,,,,1,
+M,,1,,1,,1,,,,,,,,,
+IXa:M,1,,,,,,,1,,,,1,,,
+X,,,,1,,,,1,,,,,,,
+X:M,,,1,,,,,,,1,,,,,
+Xa,,,,,,1,,,,,,1,,,
+Xa:M,,,,,1,,,,,,,,,1,
+IXa:M:X,,,,,,,1,,1,,,,,,
+IXa:M:Xa,,,,,,,,,,,1,,1,,1

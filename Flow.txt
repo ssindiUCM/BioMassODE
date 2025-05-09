@@ -45,12 +45,11 @@ DILUTION = Dilution(VolP,P_SUB, PL, PL_S, PL_V,IIa,k_pla_act,k_pla_plus,kact_e2,
 #Lipid Reaction: Making sure this works
 L_TF + X <-> X_st, kon_x, koff_x, nbs_x, LIPID
 
-####THIS IS THE GOAL FOR FLOW
-#Flow Reactions; assume upstream is SpeciesName_up
+#Flow Reactions as a list: assume upstream is SpeciesName_up
 FLOW, kflow, X, XI
 FLOW, kflow, TFPI
-####THIS IS THE GOAL FOR FLOW
 
+#Flow Reactions as reactions!
 IIa ->, kflow, FLOW
 -> IIa, kflow, IIa_up, FLOW 
 V ->, kflow, FLOW

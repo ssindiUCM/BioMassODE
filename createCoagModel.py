@@ -1218,7 +1218,12 @@ def createBiochemicalMatrices(unique_species, parsed_reactions, flowRate, prefix
 
     #Do we have any bad reaction rates?
     filtered_bad_rates = bad_rates.copy()
-    filtered_bad_rates.pop(uniqueFlowRate, None)  # Safely remove if it exists
+    #filtered_bad_rates.pop(uniqueFlowRate, None)  # Safely remove if it exists
+    try:
+        filtered_bad_rates.pop(uniqueFlowRate, None)
+    except NameError:
+        pass  # uniqueFlowRate was never defined, so do nothing
+    
     if len(filtered_bad_rates) > 0:
         print(f"Error: We found some biochemical rates with different dimensions.")
         for rate, column_sum in filtered_bad_rates.items():
@@ -1416,7 +1421,7 @@ class Stoich:
 # Create Output Files #
 #######################
 
-def write_species_ode(f, i, species, s, rates, parsed_reactions, specialSpecies, DILUTION, dil_string, verbose):
+def write_species_ode(f, i, species, s, rates, parsed_reactions, specialSpecies, DILUTION, dil_string=None, verbose=False):
     Ns = len(s.species)
     Nr = len(s.rates)
     
@@ -1802,7 +1807,9 @@ def create_matlab_multipleFileOutput(input_file: str, outputPrefix: str,s: Stoic
         first_func = dilution_list[0]
         transformed_args = [transform_string(arg) for arg in first_func['args']]
         dil_string = f"{first_func['name']}({', '.join(transformed_args)})"
-    
+    else:
+        dil_string = None
+        
     # First pass: all species except platelet sites & platelet stores
     for i in range(Ns):
         speciesName = species[i]

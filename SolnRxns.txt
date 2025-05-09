@@ -1,0 +1,8 @@
+IXa + M <-> IXa:M, kpixam, kmixam
+X + M <-> X:M, kpxm,kmxm
+Xa + M <-> Xa:M, kpxam,kmxam
+IXa:M + X <-> IXa:M:X, kpixamx,kmixamx
+IXa + X:M <-> IXa:M:X, kpixam, kmixam
+IXa:M:X -> IXa:M:Xa, kcat
+IXa:M:Xa <-> IXa:M + Xa, kpxam,kmxam
+IXa:M:Xa <-> IXa + Xa:M, kpixam, kmixam
