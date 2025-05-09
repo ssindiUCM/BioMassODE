@@ -130,17 +130,10 @@
 
     Feature to Consider Developing:
     -----------------------------------
-    - Allow setting rates and initial conditions from text file or external file.
+    - Allow setting rates and initial conditions seprate external file.
     - Improve MATLAB text wrapping for long lines.
     - Add back support for Python code.
 
-    Problems to Resolve:
-    -----------------------------------
-    - Check for valid reaction types (i.e., flow types must all have the same FLOW rate)
-        * Really there are 2 flow rates for biochemical species and platelets.
-    - Add support for dummy variables in the function declaration (i.e., I can do an "x")
-    - (DONE) Potential Error: We use Transformed strings (X:V to XbV) but we might not have done this in the arguments for a function. (Output transformed args instead of normal args)
-    
     Current Version:
         Suzanne Sindi, 05/06/2025
 
